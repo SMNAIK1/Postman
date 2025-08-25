@@ -1480,7 +1480,7 @@
 									"\r",
 									"if(token_env == 'qlab02' || token_env == 'plab01') {\r",
 									"    username = 'iiabR0XqY3GOHQOCLmZ7QyItAXvb5LUs';\r",
-									"    password = pm.collectionVariables.get(\"password\");\r",
+									"    password = pm.globals.get(\"password\");\r",
 									"}\r",
 									"\r",
 									"if(isAuthenticationRequired) {\r",
@@ -3513,7 +3513,7 @@
 							"\r",
 							"if(token_env == 'qlab02' || token_env == 'plab01') {\r",
 							"    username = 'iiabR0XqY3GOHQOCLmZ7QyItAXvb5LUs';\r",
-							"    password = pm.collectionVariables.get(\"password\");\r",
+							"    password = pm.globals.get(\"password\");\r",
 							"}\r",
 							"\r",
 							"if(isAuthenticationRequired) {\r",
@@ -3686,7 +3686,7 @@
 							"\r",
 							"if(token_env == 'qlab02' || token_env == 'plab01') {\r",
 							"    username = 'iiabR0XqY3GOHQOCLmZ7QyItAXvb5LUs';\r",
-							"    password = pm.collectionVariables.get(\"password\");\r",
+							"    password = pm.globals.get(\"password\");\r",
 							"}\r",
 							"\r",
 							"if(isAuthenticationRequired) {\r",
@@ -3862,7 +3862,7 @@
 		{
 			"listen": "prerequest",
 			"script": {
-				"id": "f3c40696-d803-4afe-94bb-2c9e694e336a",
+				"id": "b0222ea8-f5d6-4a68-a081-48e822501fe9",
 				"type": "text/javascript",
 				"exec": [
 					""
@@ -3872,7 +3872,7 @@
 		{
 			"listen": "test",
 			"script": {
-				"id": "d53d58e9-7bed-4427-8092-34ae5e005b09",
+				"id": "d07bafdc-6718-47e5-b80e-8c17dc2796b5",
 				"type": "text/javascript",
 				"exec": [
 					""
@@ -3923,10 +3923,6 @@
 		{
 			"key": "Delay",
 			"value": "3000"
-		},
-		{
-			"key": "password",
-			"value": ""
 		},
 		{
 			"key": "**************************************",
