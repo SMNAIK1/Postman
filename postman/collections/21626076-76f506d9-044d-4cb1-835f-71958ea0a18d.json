@@ -3862,7 +3862,7 @@
 		{
 			"listen": "prerequest",
 			"script": {
-				"id": "b0222ea8-f5d6-4a68-a081-48e822501fe9",
+				"id": "11f931d7-1adb-47fa-8827-69ba772ca332",
 				"type": "text/javascript",
 				"exec": [
 					""
@@ -3872,7 +3872,7 @@
 		{
 			"listen": "test",
 			"script": {
-				"id": "d07bafdc-6718-47e5-b80e-8c17dc2796b5",
+				"id": "a3cb0384-56d8-4bd6-9f01-1bbd1d46137e",
 				"type": "text/javascript",
 				"exec": [
 					""
@@ -3927,6 +3927,12 @@
 		{
 			"key": "**************************************",
 			"value": "****Change during password rotation******",
+			"disabled": true
+		},
+		{
+			"key": "***password***",
+			"value": "***Add password in your Global Variable****",
+			"type": "string",
 			"disabled": true
 		}
 	]
