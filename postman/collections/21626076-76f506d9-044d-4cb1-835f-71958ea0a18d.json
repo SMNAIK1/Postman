@@ -1,0 +1,3937 @@
+{
+	"info": {
+		"_postman_id": "21626076-76f506d9-044d-4cb1-835f-71958ea0a18d",
+		"name": "SAPECC_GetShippingEvents_Sagar_Completely Automated - LATEST",
+		"description": "# _**HOW TO USE: - PLEASE REFER BELOW INSTRUCTIONS**_\n\n#### _In the_ _**Collection Variables**_ _section, update the following:_\n\n1. **Environment** – Enter the target environment  \n    (e.g., DEV2, DEV7, QLAB02, etc.) – _case insensitive_.\n    \n2. **ESP** – Enter the ESP detail (e.g., QLAB02, QLAB03, etc.). – _case insensitive_.\n    \n3. **RESOURCE_EXT_ENV** – **Optional:**\n    \n    1. Leave blank to default to the selected Environment.\n        \n    2. Or specify a different environment if needed (e.g., DEV2, DEV7, QLAB02, etc.).\n        \n4. **OrderID** – Enter the specific Order ID you want to test.\n    \n5. **EID_List** (non-mandatory) - This can be changed if required but make sure to give in same Array format as shown in example below with any number of EIDs. \\[\"89049032005001111110000005878097\",\"89049032005001111110000005877418\"\\]\n    \n6. **TAC_Codes (**non-mandatory) - This is required to generate IMEIs for ESIM and Device with no Plan orders. You can change only if required or leave as is but make sure to give in same Array format as shown in example below with any number of TAC Codes.  \n    \\[\"35077773\", \"35487650\"\\]\n    \n7. **Delay (**non-mandatory) - This is a delay set before triggering each request, can be modified as per requirement.\n    \n8. **password** - As part of password rotation this field has to be updated each time the password is changed.\n    \n\n##### Only update non-mandatory variables if your test case demands it; otherwise, they can be left at their default values.\n\n#### _Once variables are set as per your requirement:_\n\n- Click on Activation / Return.\n    \n- Simply run the collection.\n    \n- No need to uncheck any request or modify variables unless explicitly needed for your scenario.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Activation / Purchase",
+			"item": [
+				{
+					"name": "CHECK DEEPIO STATUS",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "23ed78a5-adea-4f91-ad82-524b9075976d",
+								"exec": [
+									"const baseURL = \"https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters\";\r",
+									"const orderId = pm.collectionVariables.get(\"OrderId\");\r",
+									"const env = pm.collectionVariables.get(\"ESP\");\r",
+									"\r",
+									"if (!orderId || !env) {\r",
+									"    console.error(\"❌ OrderId or ESP is missing.\");\r",
+									"    pm.execution.setNextRequest(null);\r",
+									"    return;\r",
+									"}\r",
+									"\r",
+									"const payloads = [\r",
+									"    { eventName: \"FulfillmentOrderCreated\" },\r",
+									"    { eventName: \"FulfillmentOrderCreateAcknowledged\" }\r",
+									"];\r",
+									"\r",
+									"const retryKey = \"deepio_retry_count\";\r",
+									"const maxRetries = 10;\r",
+									"const retryDelay = 10000; // 10 seconds in ms\r",
+									"\r",
+									"let retryCount = parseInt(pm.environment.get(retryKey) || \"0\");\r",
+									"let failedEvents = [];\r",
+									"\r",
+									"function checkAllEvents(callback) {\r",
+									"    let completed = 0;\r",
+									"    failedEvents = [];\r",
+									"\r",
+									"    payloads.forEach(({ eventName }) => {\r",
+									"        const payload = {\r",
+									"            consumerFlag: false,\r",
+									"            env: env,\r",
+									"            eventName: eventName,\r",
+									"            key: \"orderId\",\r",
+									"            value: orderId,\r",
+									"            payloadFlag: true\r",
+									"        };\r",
+									"\r",
+									"        pm.sendRequest({\r",
+									"            url: baseURL,\r",
+									"            method: \"POST\",\r",
+									"            header: { \"Content-Type\": \"application/json\" },\r",
+									"            body: {\r",
+									"                mode: \"raw\",\r",
+									"                raw: JSON.stringify(payload)\r",
+									"            }\r",
+									"        }, function (err, res) {\r",
+									"            if (err || !res) {\r",
+									"                console.error(`❌ Request failed for ${eventName}:`, err || \"No response\");\r",
+									"                failedEvents.push(eventName);\r",
+									"            } else {\r",
+									"                try {\r",
+									"                    const json = res.json();\r",
+									"                    if (json.status === \"OK\") {\r",
+									"                        console.log(`✅ ${eventName} → OK`);\r",
+									"                    } else {\r",
+									"                        console.warn(`❌ ${eventName} → status = ${json.status}`);\r",
+									"                        failedEvents.push(eventName);\r",
+									"                    }\r",
+									"                } catch (e) {\r",
+									"                    console.error(`❌ Failed to parse response for ${eventName}: ${e.message}`);\r",
+									"                    failedEvents.push(eventName);\r",
+									"                }\r",
+									"            }\r",
+									"\r",
+									"            completed++;\r",
+									"            if (completed === payloads.length) callback();\r",
+									"        });\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"function runWithRetry() {\r",
+									"    checkAllEvents(() => {\r",
+									"        if (failedEvents.length === 0) {\r",
+									"            console.log(\"✅ All DeepIO events returned OK. Proceeding with collection.\");\r",
+									"            pm.environment.unset(retryKey); // Reset retry count\r",
+									"        } else {\r",
+									"            if (retryCount < maxRetries) {\r",
+									"                retryCount++;\r",
+									"                pm.environment.set(retryKey, retryCount.toString());\r",
+									"                console.warn(`⚠️ Retry ${retryCount}/${maxRetries} in 10 seconds due to failures: ${failedEvents.join(\", \")}`);\r",
+									"\r",
+									"                setTimeout(() => {\r",
+									"                    postman.setNextRequest(pm.info.requestName); // Retry same request\r",
+									"                }, retryDelay);\r",
+									"            } else {\r",
+									"                console.error(`❌ Max retries reached. Failed events: ${failedEvents.join(\", \")}`);\r",
+									"                pm.environment.unset(retryKey); // Clean up\r",
+									"                pm.execution.setNextRequest(null); // Stop collection\r",
+									"            }\r",
+									"        }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"runWithRetry();\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-443990e1-8148-4d57-9731-199c78c2835c",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"consumerFlag\" :  false ,\r\n  \"env\" :  \"{{ESP}}\" ,\r\n  \"eventName\" :  \"FulfillmentOrderCreated\" ,\r\n  \"key\" : \"orderId\" ,\r\n  \"value\" :  \"{{OrderId}}\" ,\r\n  \"payloadFlag\" :  true\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"api",
+								"deep",
+								"checker",
+								"v1",
+								"event",
+								"parameters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Fetch Deepio_SAPORDERID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"id": "db1866f1-07c3-485b-b6c1-c8fefe6cf836",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// 1. Fetch ShiptoOrder Placed event from DEEPIO and stores it, if event fails retries for 10 times at 10 secs delay\r",
+									"// 2. Extracts all the order details and stores to variables\r",
+									"// 3. Runs getOrderDetails request and stores the Response in a variable\r",
+									"\r",
+									"// ✅ CONFIG\r",
+									"const maxRetries = 10;\r",
+									"const retryDelay = 10000; // 10 sec in ms\r",
+									"\r",
+									"// ✅ Always initialize to 0 if not present or reset for fresh run\r",
+									"let rawRetry = pm.environment.get(\"ShipToRetryCount\");\r",
+									"if (!rawRetry || isNaN(parseInt(rawRetry))) {\r",
+									"    pm.environment.set(\"ShipToRetryCount\", \"0\");\r",
+									"}\r",
+									"\r",
+									"let retryCount = parseInt(pm.environment.get(\"ShipToRetryCount\")) || 0;\r",
+									"\r",
+									"try {\r",
+									"    if (pm.response.code >= 200 && pm.response.code < 300) {\r",
+									"        const responseJson1 = pm.response.json();\r",
+									"        const payloadString1 = responseJson1.payload;\r",
+									"\r",
+									"        if (!payloadString1) {\r",
+									"            throw new Error(\"Payload missing in response\");\r",
+									"        }\r",
+									"\r",
+									"        const payloadJson = JSON.parse(payloadString1);\r",
+									"        pm.environment.set(\"ShiptoOrderPlaced\", JSON.stringify(payloadJson));\r",
+									"        pm.environment.unset(\"ShipToRetryCount\"); // Reset retry count on success\r",
+									"        console.log(\"✅ Success - Converted Payload JSON:\", payloadJson);\r",
+									"\r",
+									"        // ✅ CLEAR OLD VALUES FIRST\r",
+									"        pm.environment.unset(\"BAN\");\r",
+									"        pm.environment.unset(\"SAPorderID\");\r",
+									"        pm.environment.unset(\"PaymentID\");\r",
+									"        pm.environment.unset(\"product_netAmount\");\r",
+									"        pm.environment.unset(\"product_totalAmount\");\r",
+									"\r",
+									"        for (let i = 1; i <= 20; i++) {\r",
+									"            pm.environment.unset(`productType${i}`);\r",
+									"            pm.environment.unset(`product${i}_SKU`);\r",
+									"            pm.environment.unset(`product${i}_skuDesc`);\r",
+									"            pm.environment.unset(`product${i}_manufacturer`);\r",
+									"            pm.environment.unset(`product${i}_MSISDN`);\r",
+									"            pm.environment.unset(`product${i}_OrderLineID`);\r",
+									"            pm.environment.unset(`SpecialSku_${i}`);\r",
+									"            pm.environment.unset(`SpecialSku_${i}_OrderDetailID`);\r",
+									"        }\r",
+									"\r",
+									"        // ✅ Extract\r",
+									"        let root = payloadJson;\r",
+									"\r",
+									"        let BAN = root.auditInfo.accountNumber || \"N/A\";\r",
+									"        let SAPorderID = root.payload?.supplyChain?.orderNumber || \"N/A\";\r",
+									"        let orderReasonDesc = root.payload?.supplyChain?.orderReasonDesc || \"N/A\";\r",
+									"        let PaymentID = root.payload?.customerProfile?.paymentInfo?.fullAuthPaymentId || \"N/A\";\r",
+									"\r",
+									"        pm.environment.set(\"BAN\", BAN);\r",
+									"        pm.environment.set(\"SAPorderID\", SAPorderID);\r",
+									"        pm.environment.set(\"orderReasonDesc\", orderReasonDesc);\r",
+									"        pm.environment.set(\"PaymentID\", PaymentID);\r",
+									"\r",
+									"        console.log(`✅ BAN: ${BAN}`);\r",
+									"        console.log(`✅ SAPorderID: ${SAPorderID}`);\r",
+									"        console.log(`✅ PaymentID: ${PaymentID}`);\r",
+									"        console.log(`✅ orderReasonDesc: ${orderReasonDesc}`);\r",
+									"\r",
+									"        let lineItems = root.payload?.lineItem || [];\r",
+									"        let allowedTypes = [\"Device\", \"SIM\", \"Accessory\"];\r",
+									"        let filteredIndex = 1;\r",
+									"        let specialIndex = 1;\r",
+									"\r",
+									"        lineItems.forEach(item => {\r",
+									"            let productType = item.productType || \"N/A\";\r",
+									"            let sku = item.sku || \"N/A\";\r",
+									"            let skuDesc = item.skuDesc || \"N/A\";\r",
+									"            let msisdn = item.msisdn || \"N/A\";\r",
+									"            let manufacturer = item.manufacturer || \"N/A\";\r",
+									"            let orderDetailID = (item.imeiSim && item.imeiSim[0]) ? item.imeiSim[0].orderDetailID : \"N/A\";\r",
+									"\r",
+									"            // ✅ Special SKU capture\r",
+									"            if ([\"D2AND\", \"SHIPFEE\"].includes(sku)) {\r",
+									"                pm.environment.set(`SpecialSku_${specialIndex}`, sku);\r",
+									"                pm.environment.set(`SpecialSku_${specialIndex}_OrderDetailID`, orderDetailID);\r",
+									"                console.log(`📌 Captured Special SKU ${specialIndex}: ${sku}, OrderDetailID: ${orderDetailID}`);\r",
+									"                specialIndex++;\r",
+									"                return; // Skip normal flow for special SKU\r",
+									"            }\r",
+									"\r",
+									"            // ✅ Only store normal product if type is allowed\r",
+									"            if (!allowedTypes.includes(productType)) return;\r",
+									"\r",
+									"            pm.environment.set(`productType${filteredIndex}`, productType);\r",
+									"            pm.environment.set(`product${filteredIndex}_SKU`, sku);\r",
+									"            pm.environment.set(`product${filteredIndex}_skuDesc`, skuDesc);\r",
+									"            pm.environment.set(`product${filteredIndex}_manufacturer`, manufacturer);\r",
+									"            pm.environment.set(`product${filteredIndex}_MSISDN`, msisdn);\r",
+									"            pm.environment.set(`product${filteredIndex}_OrderLineID`, orderDetailID);\r",
+									"\r",
+									"            console.log(`✅ Stored product ${filteredIndex}:`);\r",
+									"            console.log(`   → productType${filteredIndex}: ${productType}`);\r",
+									"            console.log(`   → product${filteredIndex}_SKU: ${sku}`);\r",
+									"            console.log(`   → product${filteredIndex}_skuDesc: ${skuDesc}`);\r",
+									"            console.log(`   → product${filteredIndex}_manufacturer: ${manufacturer}`);\r",
+									"            console.log(`   → product${filteredIndex}_MSISDN: ${msisdn}`);\r",
+									"            console.log(`   → product${filteredIndex}_OrderLineID: ${orderDetailID}`);\r",
+									"\r",
+									"            filteredIndex++;\r",
+									"        });\r",
+									"\r",
+									"        let netAmount = root.payload?.orderPricing?.netAmount || \"N/A\";\r",
+									"        let totalAmount = root.payload?.orderPricing?.totalAmount || \"N/A\";\r",
+									"\r",
+									"        pm.environment.set(`product_netAmount`, netAmount);\r",
+									"        pm.environment.set(`product_totalAmount`, totalAmount);\r",
+									"\r",
+									"        console.log(`✅ Overall Net Amount: ${netAmount}`);\r",
+									"        console.log(`✅ Overall Total Amount: ${totalAmount}`);\r",
+									"        console.log(`✅ Total valid products stored: ${filteredIndex - 1}`);\r",
+									"\r",
+									"    } else {\r",
+									"        throw new Error(`Received non-200 response: ${pm.response.code}`);\r",
+									"    }\r",
+									"\r",
+									"} catch (err) {\r",
+									"    console.warn(`⚠️ Attempt ${retryCount + 1} failed: ${err.message}`);\r",
+									"\r",
+									"    if (retryCount < maxRetries) {\r",
+									"        retryCount++;\r",
+									"        pm.environment.set(\"ShipToRetryCount\", retryCount.toString());\r",
+									"        console.log(`⏳ Retrying after ${retryDelay / 1000}s (Attempt ${retryCount}/${maxRetries})...`);\r",
+									"        setTimeout(() => {\r",
+									"            pm.execution.setNextRequest(pm.info.requestName);\r",
+									"        }, retryDelay);\r",
+									"    } else {\r",
+									"        pm.environment.unset(\"ShipToRetryCount\");\r",
+									"        console.error(`❌ Max retries (${maxRetries}) reached. Stopping.`);\r",
+									"    }\r",
+									"}\r",
+									"\r",
+									"\r",
+									"/////////////////////////////////////////////////////////////////\r",
+									"\r",
+									"\r",
+									"// Get OrderId from collection variable\r",
+									"const orderId = pm.collectionVariables.get(\"OrderId\");\r",
+									"\r",
+									"if (!orderId) {\r",
+									"    console.error(\"❌ No OrderId found in collection variables\");\r",
+									"    pm.setNextRequest(null); // Stop run\r",
+									"}\r",
+									"\r",
+									"// Construct SOAP XML with OrderId\r",
+									"const soapBody = `\r",
+									"<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/OrderWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r",
+									"   <soapenv:Header/>\r",
+									"   <soapenv:Body>\r",
+									"      <n0:getOrderDetailsRequest serviceTransactionId=\"02BCF7DA3F911EDDBBE36902421B9367\"\r",
+									"         xmlns:n0=\"http://services.tmobile.com/OrderManagement/OrderWSIL/V1\"\r",
+									"         xmlns:n1=\"http://services.tmobile.com/base\"\r",
+									"         xmlns:prx=\"urn:sap.com:proxy:MQK:/1SAI/TAS877D66C636425A9BD884:750\"\r",
+									"         xmlns:soap-env=\"http://schemas.xmlsoap.org/soap/envelope/\"\r",
+									"         xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\">\r",
+									"         <n1:header>\r",
+									"            <n1:sender>\r",
+									"               <n1:senderId>CARE</n1:senderId>\r",
+									"               <n1:channelId>CARE</n1:channelId>\r",
+									"               <n1:applicationId>SAP-CARE</n1:applicationId>\r",
+									"               <n1:applicationUserId>SMNAIK1</n1:applicationUserId>\r",
+									"               <n1:sessionId>U0pIQTE3X19fX19fMjQyNjJfArz32j-RHt2742eFPwuzZw==</n1:sessionId>\r",
+									"               <n1:workflowId>OrderWSIL.getOrderDetails</n1:workflowId>\r",
+									"               <n1:activityId>02BCF7DA3F911EDDBBE36902421B9367</n1:activityId>\r",
+									"               <n1:timestamp>2023-05-10T10:13:17Z</n1:timestamp>\r",
+									"               <n1:dealerCode>2211802</n1:dealerCode>\r",
+									"               <n1:interactionId>SMNAIK120230510101313</n1:interactionId>\r",
+									"               <n1:entitlements>\r",
+									"                  <n1:entitlement>\r",
+									"                     <n1:actionName>VIEW_CUSTOMER_SSN_TAXID</n1:actionName>\r",
+									"                  </n1:entitlement>\r",
+									"                  <n1:entitlement>\r",
+									"                     <n1:actionName>VIEW_ORDER_RECEIPT</n1:actionName>\r",
+									"                  </n1:entitlement>\r",
+									"                  <n1:userId>SMNAIK1</n1:userId>\r",
+									"               </n1:entitlements>\r",
+									"            </n1:sender>\r",
+									"            <n1:target>\r",
+									"               <n1:targetSystemId>\r",
+									"                  <n1:systemId>WSIL</n1:systemId>\r",
+									"                  <n1:userId>SMNAIK1</n1:userId>\r",
+									"               </n1:targetSystemId>\r",
+									"               <n1:userCompanyId>T-Mobile</n1:userCompanyId>\r",
+									"               <n1:servicePartnerId>TMO</n1:servicePartnerId>\r",
+									"               <n1:transactionType>OrderWSIL.getOrderDetails</n1:transactionType>\r",
+									"            </n1:target>\r",
+									"            <n1:providerId>\r",
+									"               <n1:contextId>IAM ID</n1:contextId>\r",
+									"            </n1:providerId>\r",
+									"         </n1:header>\r",
+									"         <n0:orderId>${orderId}</n0:orderId>\r",
+									"      </n0:getOrderDetailsRequest>\r",
+									"   </soapenv:Body>\r",
+									"</soapenv:Envelope>\r",
+									"`;\r",
+									"\r",
+									"const host = pm.environment.get(\"XMLENV\");\r",
+									"\r",
+									"pm.sendRequest({\r",
+									"    url: `http://${host}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/OrderWSIL`,\r",
+									"    method: 'POST',\r",
+									"    header: {\r",
+									"        'Content-Type': 'text/xml'\r",
+									"    },\r",
+									"    body: {\r",
+									"        mode: 'raw',\r",
+									"        raw: soapBody\r",
+									"    }\r",
+									"}, function (err, res) {\r",
+									"    if (err) {\r",
+									"        console.error('❌ SOAP Request failed:', err);\r",
+									"    } else {\r",
+									"        console.log(`✅ SOAP Response Success — Status Code: ${res.code}`);\r",
+									"        \r",
+									"        // Save response to env var\r",
+									"        pm.environment.set(\"OrderDetailsResponse\", res.text());\r",
+									"\r",
+									"        // ✅ NEW: Check <ns:responseStatus code=\"...\">\r",
+									"        const match = res.text().match(/<ns:responseStatus[^>]*code=\"(\\d+)\"/);\r",
+									"        if (match && match[1]) {\r",
+									"            const statusCode = match[1];\r",
+									"            console.log(`ℹ️ responseStatus code found: ${statusCode}`);\r",
+									"            if (statusCode !== \"100\") {\r",
+									"                console.error(`❌ responseStatus code is not 100, it is: ${statusCode}`);\r",
+									"                pm.execution.setNextRequest(null); // stop\r",
+									"            }\r",
+									"        } else {\r",
+									"            console.warn(\"⚠️ Could not find responseStatus code in response body.\");\r",
+									"        }\r",
+									"    }\r",
+									"});\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "d8e7e3c0-e70f-4c63-8537-e6d4a55004c4",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// -- 1. Set the current date and time in ISO 8601 format as environment variables.\r",
+									"// -- 2. Set the JSON and XML environment variables based on the value of the \"Environment\" collection variable.\r",
+									"// -- 3. Unset the \"ShiptoOrderPlaced\" environment variable.\r",
+									"\r",
+									"// Get current UTC date and time\r",
+									"const now = new Date();\r",
+									"\r",
+									"// Format 1: ISO 8601 without milliseconds (e.g., 2025-04-22T13:08:06Z)\r",
+									"const currentDateTime = now.toISOString().split('.')[0] + 'Z';\r",
+									"\r",
+									"// Format 2: ISO 8601 with milliseconds (default format from toISOString)\r",
+									"const currentDateTime1 = now.toISOString();\r",
+									"\r",
+									"// Format 3: ISO 8601 with offset -00:00\r",
+									"const currentDateTime2 = currentDateTime.replace('Z', '-00:00');\r",
+									"\r",
+									"// Set variables in Postman\r",
+									"pm.environment.set(\"currentDateTime\", currentDateTime);\r",
+									"pm.environment.set(\"currentDateTime1\", currentDateTime1);\r",
+									"pm.environment.set(\"currentDateTime2\", currentDateTime2);\r",
+									"\r",
+									"let env = pm.collectionVariables.get(\"Environment\");\r",
+									"let jsonEnv, xmlEnv;\r",
+									"\r",
+									"if (env) {\r",
+									"    env = env.toUpperCase();\r",
+									"\r",
+									"    switch (env) {\r",
+									"        case \"DEV2\":\r",
+									"            jsonEnv = \"ilab02\";\r",
+									"            xmlEnv = \"d02\";\r",
+									"            break;\r",
+									"        case \"DEV7\":\r",
+									"            jsonEnv = \"ilab03\";\r",
+									"            xmlEnv = \"d07\";\r",
+									"            break;\r",
+									"        case \"DEV8\":\r",
+									"            jsonEnv = \"ilab04\";\r",
+									"            xmlEnv = \"d08\";\r",
+									"            break;\r",
+									"        case \"QLAB02\":\r",
+									"            jsonEnv = \"qlab02\";\r",
+									"            xmlEnv = \"ql2\";\r",
+									"            break;\r",
+									"        case \"QLAB03\":\r",
+									"            jsonEnv = \"qlab03\";\r",
+									"            xmlEnv = \"ql3\";\r",
+									"            break;\r",
+									"        case \"QLAB07\":\r",
+									"            jsonEnv = \"qlab07\";\r",
+									"            xmlEnv = \"ql7\";\r",
+									"            break;\r",
+									"        default:\r",
+									"            console.log(`⚠️ No mapping defined for Environment: ${env}`);\r",
+									"    }\r",
+									"\r",
+									"    if (jsonEnv && xmlEnv) {\r",
+									"        pm.environment.set(\"JSONENV\", jsonEnv);  // ✅ Set as environment variable\r",
+									"        pm.environment.set(\"XMLENV\", xmlEnv);    // ✅ Set as environment variable\r",
+									"        console.log(`✅ Environment: ${env}`);\r",
+									"        console.log(`→ JSONENV set to: ${jsonEnv}`);\r",
+									"        console.log(`→ XMLENV set to: ${xmlEnv}`);\r",
+									"    }\r",
+									"} else {\r",
+									"    console.log(\"⚠️ Environment variable is not set in collection variables.\");\r",
+									"}\r",
+									"\r",
+									"pm.environment.unset(\"ShiptoOrderPlaced\");"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-4593d5bd-3266-427d-9f74-82ca15e91209",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYwMjk4NjU0Mzk5Iiwic3RvcmVJZCI6IiIsInVzbiI6IjNmNjY0NmFkLTQwZmUtYzFkOC05ZDdmLTBkY2Y5NGRlYTk5NyIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjAyOTg2NTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MDMwMjI1NCwiaWF0IjoxNjYwMjk4NjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI5MjQ0N2QwOC01MDQ0LWI1MjUtNjgxNi0yZjQwNmJhNDBkYzMifQ.fHt1cwhzX_W_WtUMSuIlnTCyVGXwpnnLCbBcbTcFalgudYBnor9xx_GLrkH7roLuWAcYeM4cNsSA-WXwnXTfCLyPqYR7QjjYiOKCjvgrCbO0TP-duc5RWg2w9CT8WwTFx9mIPz_y19wYjMPR1Kn_CfLyv-HOQPxkvakyz6Glq9mGO2IOHM9NNgZYohJfB32wU1f6YfYYGL-s1XFAkQBdq5TzHAaShIxJvSTZ8gfOkIz9yf_RMOHxhfxLfkFd0lHDwxo_V2_LqF0lfrW4R-6jdHDQl5jO6HSnE6l5l5kT4EZKqVbimr_T_e8lytxY8cDtv3tLCTuyk5fJYfInN94K5A",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"consumerFlag\" :  false ,\n  \"env\" :  \"{{ESP}}\" ,\n  \"eventName\" :  \"FulfillmentOrderCreated\" ,\n  \"key\" : \"orderId\" ,\n  \"value\" :  \"{{OrderId}}\" ,\n  \"payloadFlag\" :  true\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"api",
+								"deep",
+								"checker",
+								"v1",
+								"event",
+								"parameters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Fetch Deepio_FulfillmentOrderCreateAcknowledged",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"id": "7adcdcbb-39b8-4728-bcd6-2a94705be68a",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// 1. Extracts the OrderAccepted Event and parses as required\r",
+									"// 2. Generates IMEIs for Device_ESIM & standalone Device_noPlan\r",
+									"// 3. Sets environment variables for IMEIs\r",
+									"// 4. Logs the results\r",
+									"\r",
+									"// Extracting and Parsing OrderAccepted --\r",
+									"\r",
+									"const maxRetries = 10;\r",
+									"const retryDelay = 10000; // 10 seconds\r",
+									"let retryCount = parseInt(pm.environment.get(\"OrderAcceptedRetryCount\") || \"0\");\r",
+									"\r",
+									"try {\r",
+									"    if (pm.response.code >= 200 && pm.response.code < 300) {\r",
+									"        const responseJson = pm.response.json();\r",
+									"        const payloadString = responseJson.payload;\r",
+									"        const payloadJson = JSON.parse(payloadString);\r",
+									"\r",
+									"        // Save parsed payload\r",
+									"        pm.environment.set(\"OrderAccepted\", JSON.stringify(payloadJson));\r",
+									"        pm.environment.unset(\"OrderAcceptedRetryCount\");\r",
+									"\r",
+									"        // ✅ Success flag\r",
+									"        pm.environment.set(\"OrderAcceptedSuccess\", \"true\");\r",
+									"\r",
+									"        console.log(\"✅ Successfully parsed and stored OrderAccepted payload:\");\r",
+									"        console.log(payloadJson);\r",
+									"    } else {\r",
+									"        throw new Error(`Received status code ${pm.response.code}`);\r",
+									"    }\r",
+									"\r",
+									"} catch (err) {\r",
+									"    console.warn(`⚠️ Attempt ${retryCount + 1} failed: ${err.message}`);\r",
+									"\r",
+									"    // ❌ Clear success flag on failure\r",
+									"    pm.environment.unset(\"OrderAcceptedSuccess\");\r",
+									"\r",
+									"    if (retryCount < maxRetries) {\r",
+									"        retryCount++;\r",
+									"        pm.environment.set(\"OrderAcceptedRetryCount\", retryCount.toString());\r",
+									"\r",
+									"        console.log(`⏳ Retrying after ${retryDelay / 1000} seconds (Attempt ${retryCount}/${maxRetries})...`);\r",
+									"\r",
+									"        // 🔁 Retry same request\r",
+									"        setTimeout(() => {\r",
+									"            pm.execution.setNextRequest(pm.info.requestName);\r",
+									"        }, retryDelay);\r",
+									"    } else {\r",
+									"        pm.environment.unset(\"OrderAcceptedRetryCount\");\r",
+									"        console.error(\"❌ Max retries reached. Stopping retries.\");\r",
+									"        pm.execution.setNextRequest(null); // ⛔ Stop collection run\r",
+									"    }\r",
+									"}\r",
+									"\r",
+									"\r",
+									"/////////////////////////////////////////////////\r",
+									"\r",
+									"// === Generate IMEIs for Device_ESIM & standalone Device_noPlan ===\r",
+									"\r",
+									"// ✅ 1️⃣ Get TAC pool from Collection Variable\r",
+									"const tacRaw = pm.collectionVariables.get(\"TAC_Codes\");\r",
+									"if (!tacRaw) {\r",
+									"  throw new Error(\"❌ Missing TAC_Codes in collection variables!\");\r",
+									"}\r",
+									"const tacArray = JSON.parse(tacRaw);\r",
+									"if (!Array.isArray(tacArray) || tacArray.length === 0) {\r",
+									"  throw new Error(\"❌ TAC_Codes is empty or invalid!\");\r",
+									"}\r",
+									"\r",
+									"// ✅ 2️⃣ Utility: Random TAC & Serial + Luhn check digit\r",
+									"function getRandomTAC() {\r",
+									"  return tacArray[Math.floor(Math.random() * tacArray.length)];\r",
+									"}\r",
+									"\r",
+									"function getRandomSerial() {\r",
+									"  return Math.floor(100000 + Math.random() * 900000).toString();\r",
+									"}\r",
+									"\r",
+									"function calculateLuhn(number) {\r",
+									"  let len = number.length;\r",
+									"  let mul = 2;\r",
+									"  let prodArr = [];\r",
+									"  let sum = 0;\r",
+									"\r",
+									"  for (let i = 0; i < len; i++) {\r",
+									"    let num = parseInt(number.charAt(len - i - 1));\r",
+									"    let tProd = num * mul;\r",
+									"    if (tProd >= 10) {\r",
+									"      prodArr.push((tProd % 10) + 1);\r",
+									"    } else {\r",
+									"      prodArr.push(tProd);\r",
+									"    }\r",
+									"    mul = (mul === 1) ? 2 : 1;\r",
+									"  }\r",
+									"\r",
+									"  for (let i = 0; i < prodArr.length; i++) {\r",
+									"    sum += prodArr[i];\r",
+									"  }\r",
+									"\r",
+									"  return ((10 - (sum % 10)) % 10).toString();\r",
+									"}\r",
+									"\r",
+									"// ✅ 3️⃣ Count products\r",
+									"let productCounter = 0;\r",
+									"while (pm.environment.get(`productType${productCounter + 1}`)) {\r",
+									"  productCounter++;\r",
+									"}\r",
+									"\r",
+									"// ✅ 4️⃣ Find standalone Device_noPlan indexes\r",
+									"let simMSISDNs = [];\r",
+									"let deviceNoPlanList = [];\r",
+									"for (let i = 1; i <= productCounter; i++) {\r",
+									"  const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"  const msisdn = (pm.environment.get(`product${i}_MSISDN`) || \"\").trim();\r",
+									"\r",
+									"  if (finalType.startsWith(\"SIM\")) {\r",
+									"    simMSISDNs.push(msisdn);\r",
+									"  } else if (finalType.includes(\"_noplan\")) {\r",
+									"    deviceNoPlanList.push({ index: i, msisdn: msisdn });\r",
+									"  }\r",
+									"}\r",
+									"\r",
+									"// ✅ Detect USKU → covered by SIM → skip generation for them\r",
+									"let uskuCoveredDeviceNoPlans = new Set();\r",
+									"deviceNoPlanList.forEach(dev => {\r",
+									"  if (simMSISDNs.includes(dev.msisdn) && dev.msisdn) {\r",
+									"    uskuCoveredDeviceNoPlans.add(dev.index);\r",
+									"    console.log(`🔗 USKU: Device${dev.index}_noplan covered by SIM MSISDN ${dev.msisdn} → uses SIM resource IMEI`);\r",
+									"  }\r",
+									"});\r",
+									"\r",
+									"// ✅ 5️⃣ Loop → assign IMEIs\r",
+									"for (let i = 1; i <= productCounter; i++) {\r",
+									"  const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"\r",
+									"  if (finalType.includes(\"_ESIM\")) {\r",
+									"    // ✅ 2 IMEIs for each ESIM\r",
+									"    const tac1 = getRandomTAC();\r",
+									"    const serial1 = getRandomSerial();\r",
+									"    const imei1 = tac1 + serial1 + calculateLuhn(tac1 + serial1);\r",
+									"\r",
+									"    const tac2 = getRandomTAC();\r",
+									"    const serial2 = getRandomSerial();\r",
+									"    const imei2 = tac2 + serial2 + calculateLuhn(tac2 + serial2);\r",
+									"\r",
+									"    pm.environment.set(`device${i}_imei1`, imei1);\r",
+									"    pm.environment.set(`device${i}_imei2`, imei2);\r",
+									"\r",
+									"    console.log(`✅ Device${i}_ESIM → IMEI1 = ${imei1}, IMEI2 = ${imei2}`);\r",
+									"\r",
+									"\r",
+									"\r",
+									"  } else if (finalType.includes(\"_noplan\")) {\r",
+									"    if (!uskuCoveredDeviceNoPlans.has(i)) {\r",
+									"      // ✅ Standalone Device_noPlan → generate 1 IMEI\r",
+									"      const tac = getRandomTAC();\r",
+									"      const serial = getRandomSerial();\r",
+									"      const imei = tac + serial + calculateLuhn(tac + serial);\r",
+									"\r",
+									"      pm.environment.set(`device${i}_imei1`, imei);\r",
+									"      console.log(`✅ Device${i}_noplan (standalone) → IMEI1 = ${imei}`);\r",
+									"    } else {\r",
+									"      console.log(`ℹ️ Device${i}_noplan → covered by USKU, uses SIM resource IMEI → no local generation.`);\r",
+									"    }\r",
+									"  }\r",
+									"}\r",
+									"\r",
+									"console.log(\"✅ IMEI generation done!\");\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "470b2973-558f-4bcc-9857-ac9b74b68690",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// 1. From getOrderDetails Response below script will fetch all the required SIM type combinations for all the Product list\r",
+									"// 2. Decides How many PSIM / ESIM / Device with No plan and Accessory present in Order\r",
+									"\r",
+									"\r",
+									"// ✅ Get stored SOAP response XML\r",
+									"const responseXML = pm.environment.get(\"OrderDetailsResponse\");\r",
+									"if (!responseXML) {\r",
+									"  console.error(\"❌ OrderDetailsResponse is missing!\");\r",
+									"  pm.execution.setNextRequest(null);\r",
+									"}\r",
+									"\r",
+									"// ✅ Count products dynamically\r",
+									"let productCount = 0;\r",
+									"while (pm.environment.get(`productType${productCount + 1}`)) {\r",
+									"  productCount++;\r",
+									"}\r",
+									"console.log(`🔢 Total products found: ${productCount}`);\r",
+									"\r",
+									"// ✅ Final resolved SIM types\r",
+									"let simTypeMap = [];\r",
+									"\r",
+									"// ✅ Extract ALL <pfx:orderLine> blocks once\r",
+									"const allOrderLines = responseXML.match(/<pfx:orderLine[\\s\\S]*?<\\/pfx:orderLine>/gi) || [];\r",
+									"\r",
+									"for (let i = 1; i <= productCount; i++) {\r",
+									"  const productType = pm.environment.get(`productType${i}`);\r",
+									"  const msisdn = (pm.environment.get(`product${i}_MSISDN`) || \"\").trim();\r",
+									"  const orderLineID = pm.environment.get(`product${i}_OrderLineID`);\r",
+									"  let resolvedSIMType = \"\";\r",
+									"\r",
+									"  if (productType === \"Device\") {\r",
+									"    // Find THIS device’s block\r",
+									"    const thisOrderLine = allOrderLines.find(line =>\r",
+									"      line.includes(`orderLineId=\"${orderLineID}\"`)\r",
+									"    );\r",
+									"\r",
+									"    if (thisOrderLine) {\r",
+									"      // === Get rootParentID ===\r",
+									"      let rootParentID = null;\r",
+									"      const rootParentMatch = thisOrderLine.match(/<pfx:rootParentOrderLineID>(.*?)<\\/pfx:rootParentOrderLineID>/);\r",
+									"      rootParentID = rootParentMatch ? rootParentMatch[1] : null;\r",
+									"\r",
+									"      // === isEmbeddedSim only for this line ===\r",
+									"      let hasEmbeddedSim = false;\r",
+									"      const embeddedSimMatch = thisOrderLine.match(/<pfx:specificationValue name=\"isEmbeddedSim\">(.*?)<\\/pfx:specificationValue>/);\r",
+									"      if (embeddedSimMatch && embeddedSimMatch[1].trim() === \"true\") {\r",
+									"        hasEmbeddedSim = true;\r",
+									"      }\r",
+									"\r",
+									"      let hasEsimActivation = false;\r",
+									"\r",
+									"      if (rootParentID) {\r",
+									"        // ✅ Only lines with same rootParentID\r",
+									"        const sameRootLines = allOrderLines.filter(line =>\r",
+									"          line.includes(`<pfx:rootParentOrderLineID>${rootParentID}</pfx:rootParentOrderLineID>`)\r",
+									"        );\r",
+									"\r",
+									"        sameRootLines.forEach(block => {\r",
+									"          const activations = block.match(/<pfx:activationType>(.*?)<\\/pfx:activationType>/gi);\r",
+									"          if (activations) {\r",
+									"            activations.forEach(a => {\r",
+									"              const val = a.replace(/<\\/?pfx:activationType>/g, \"\").trim().toUpperCase();\r",
+									"              if (val === \"ESIM\") hasEsimActivation = true;\r",
+									"            });\r",
+									"          }\r",
+									"        });\r",
+									"\r",
+									"        console.log(`🔍 Device${i} → rootParentID=${rootParentID}, isEmbeddedSim=${hasEmbeddedSim}, anyActivationType_ESIM=${hasEsimActivation}`);\r",
+									"\r",
+									"        // ✅ USKU: check SIM sibling with same MSISDN\r",
+									"        let hasSimSibling = false;\r",
+									"        for (let j = 1; j <= productCount; j++) {\r",
+									"          if (j === i) continue;\r",
+									"          const otherType = pm.environment.get(`productType${j}`);\r",
+									"          const otherMSISDN = (pm.environment.get(`product${j}_MSISDN`) || \"\").trim();\r",
+									"          if (otherType === \"SIM\" && otherMSISDN === msisdn && msisdn) {\r",
+									"            hasSimSibling = true;\r",
+									"            console.log(`🔗 USKU (MSISDN match) → Device${i} & SIM${j} share MSISDN ${msisdn}`);\r",
+									"            break;\r",
+									"          }\r",
+									"        }\r",
+									"\r",
+									"        // ✅ Matrix\r",
+									"        if (hasEmbeddedSim && hasEsimActivation) {\r",
+									"          resolvedSIMType = hasSimSibling ? `Device${i}_noplan` : `Device${i}_ESIM`;\r",
+									"        } else if (hasEmbeddedSim && !hasEsimActivation) {\r",
+									"          resolvedSIMType = hasSimSibling ? `Device${i}_noplan` : `Device${i}_PSIM`;\r",
+									"        } else if (!hasEmbeddedSim && hasEsimActivation) {\r",
+									"          resolvedSIMType = hasSimSibling ? `Device${i}_noplan` : `Device${i}_ESIM`;\r",
+									"        } else {\r",
+									"          if (!hasSimSibling && msisdn && msisdn !== \"0000000\" && msisdn !== \"000000\") {\r",
+									"            resolvedSIMType = `Device${i}_PSIM`;\r",
+									"          } else {\r",
+									"            resolvedSIMType = `Device${i}_noplan`;\r",
+									"          }\r",
+									"        }\r",
+									"\r",
+									"      } else {\r",
+									"        console.warn(`⚠️ No rootParentOrderLineID for Device${i}`);\r",
+									"        resolvedSIMType = `Device${i}_PSIM`;\r",
+									"      }\r",
+									"\r",
+									"    } else {\r",
+									"      console.warn(`⚠️ Could not find orderLine for Device${i}`);\r",
+									"      resolvedSIMType = `Device${i}_PSIM`;\r",
+									"    }\r",
+									"\r",
+									"  } else if (productType === \"SIM\") {\r",
+									"    resolvedSIMType = `SIM${i}`;\r",
+									"  } else if (productType === \"Accessory\") {\r",
+									"    resolvedSIMType = `Accessory${i}`;\r",
+									"  } else {\r",
+									"    resolvedSIMType = `UnknownType${i}`;\r",
+									"  }\r",
+									"\r",
+									"  simTypeMap.push({\r",
+									"    index: i,\r",
+									"    productType,\r",
+									"    msisdn,\r",
+									"    resolvedSIMType,\r",
+									"  });\r",
+									"}\r",
+									"\r",
+									"// ✅ Save final resolved SIM types\r",
+									"simTypeMap.forEach(item => {\r",
+									"  pm.environment.set(`product${item.index}_FinalSIMType`, item.resolvedSIMType);\r",
+									"  console.log(`✅ product${item.index} (${item.productType}) → ${item.resolvedSIMType}`);\r",
+									"});\r",
+									"\r",
+									"console.log(\"✅ SIM Type detection done! (Safe sibling matching)\");\r",
+									"\r",
+									"\r",
+									"////////////////////////////////////////////////////\r",
+									"\r",
+									"// ✅ Count products dynamically\r",
+									"// ✅ Unique counter name to avoid conflicts\r",
+									"let resourceProductCounter = 0;\r",
+									"\r",
+									"while (pm.environment.get(`productType${resourceProductCounter + 1}`)) {\r",
+									"  resourceProductCounter++;\r",
+									"}\r",
+									"\r",
+									"console.log(`🔢 Total products found for resource count: ${resourceProductCounter}`);\r",
+									"\r",
+									"// ✅ Counters\r",
+									"let countSIM = 0;\r",
+									"let countDevicePSIM = 0;\r",
+									"let countDeviceNoPlan = 0;\r",
+									"let countDeviceESIM = 0;\r",
+									"\r",
+									"let uskuCoveredDeviceNoPlans = new Set(); // to track which Device_noPlans are covered by SIMs\r",
+									"\r",
+									"// ✅ Build lists to compare MSISDNs\r",
+									"let simMSISDNs = [];\r",
+									"let deviceNoPlanList = [];\r",
+									"\r",
+									"for (let i = 1; i <= resourceProductCounter; i++) {\r",
+									"  const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"  const msisdn = (pm.environment.get(`product${i}_MSISDN`) || \"\").trim();\r",
+									"\r",
+									"  if (finalType.startsWith(\"SIM\")) {\r",
+									"    countSIM++;\r",
+									"    if (msisdn) {\r",
+									"      simMSISDNs.push(msisdn);\r",
+									"    }\r",
+									"  } else if (finalType.includes(\"_PSIM\")) {\r",
+									"    countDevicePSIM++;\r",
+									"  } else if (finalType.includes(\"_noplan\")) {\r",
+									"    countDeviceNoPlan++;\r",
+									"    deviceNoPlanList.push({ index: i, msisdn: msisdn });\r",
+									"  } else if (finalType.includes(\"_ESIM\")) {\r",
+									"    countDeviceESIM++;\r",
+									"  }\r",
+									"}\r",
+									"\r",
+									"// ✅ Check which Device_noPlans are covered by SIMs (USKU)\r",
+									"deviceNoPlanList.forEach(dev => {\r",
+									"  if (simMSISDNs.includes(dev.msisdn) && dev.msisdn) {\r",
+									"    uskuCoveredDeviceNoPlans.add(dev.index);\r",
+									"    console.log(`🔗 USKU: Device${dev.index}_noPlan covered by SIM with same MSISDN ${dev.msisdn}`);\r",
+									"  }\r",
+									"});\r",
+									"\r",
+									"// ✅ Resource quantity\r",
+									"// SIMs + Device_PSIMs + Device_noPlan not covered by USKU SIM\r",
+									"const countDeviceNoPlanStandalone = countDeviceNoPlan - uskuCoveredDeviceNoPlans.size;\r",
+									"\r",
+									"const resourceQuantity = countSIM + countDevicePSIM + countDeviceNoPlanStandalone;\r",
+									"\r",
+									"// ✅ IMEIs: only for Device_ESIMs (2 per device)\r",
+									"const imeisToGenerate = countDeviceESIM * 2;\r",
+									"\r",
+									"console.log(`📦 SIMs needed: ${countSIM}`);\r",
+									"console.log(`📦 Device_PSIMs needed: ${countDevicePSIM}`);\r",
+									"console.log(`📦 Device_noPlan (standalone, needs resource): ${countDeviceNoPlanStandalone}`);\r",
+									"console.log(`📦 Device_ESIMs (generate IMEIs only): ${countDeviceESIM} (×2 IMEIs)`);\r",
+									"console.log(`✅ Total resourceQuantity: ${resourceQuantity}`);\r",
+									"console.log(`✅ Total IMEIs to generate: ${imeisToGenerate} (EIDs provided externally)`);\r",
+									"\r",
+									"pm.environment.set(\"resourceQuantity\", resourceQuantity);\r",
+									"pm.environment.set(\"imeisToGenerate\", imeisToGenerate);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-f59fdf48-d4bc-402f-9d8a-be65369988f9",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYwMjk4NjU0Mzk5Iiwic3RvcmVJZCI6IiIsInVzbiI6IjNmNjY0NmFkLTQwZmUtYzFkOC05ZDdmLTBkY2Y5NGRlYTk5NyIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjAyOTg2NTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MDMwMjI1NCwiaWF0IjoxNjYwMjk4NjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI5MjQ0N2QwOC01MDQ0LWI1MjUtNjgxNi0yZjQwNmJhNDBkYzMifQ.fHt1cwhzX_W_WtUMSuIlnTCyVGXwpnnLCbBcbTcFalgudYBnor9xx_GLrkH7roLuWAcYeM4cNsSA-WXwnXTfCLyPqYR7QjjYiOKCjvgrCbO0TP-duc5RWg2w9CT8WwTFx9mIPz_y19wYjMPR1Kn_CfLyv-HOQPxkvakyz6Glq9mGO2IOHM9NNgZYohJfB32wU1f6YfYYGL-s1XFAkQBdq5TzHAaShIxJvSTZ8gfOkIz9yf_RMOHxhfxLfkFd0lHDwxo_V2_LqF0lfrW4R-6jdHDQl5jO6HSnE6l5l5kT4EZKqVbimr_T_e8lytxY8cDtv3tLCTuyk5fJYfInN94K5A",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"consumerFlag\" :  false ,\n  \"env\" :  \"{{ESP}}\" ,\n  \"eventName\" :  \"FulfillmentOrderCreateAcknowledged\" ,\n  \"key\" : \"orderId\" ,\n  \"value\" :  \"{{OrderId}}\" ,\n  \"payloadFlag\" :  true\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"api",
+								"deep",
+								"checker",
+								"v1",
+								"event",
+								"parameters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1. ShiptoOrderPlaced",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "464cc2e9-51d8-4f98-b119-048faac9c138",
+								"exec": [
+									"// Set the delay before sending the request\r",
+									"\r",
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"id": "6dc1bd52-0955-4a15-8501-da1833c1ab96",
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-c5a3e89c-cf5c-4ef8-b67b-c85cac593368",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjY0MzYzNDQzNjEyIiwic3RvcmVJZCI6IiIsInVzbiI6IjAwYzcxMWRjLWQ4ZGQtNDlhOS04ZjBiLWFlNmJiYjNkZTM1MiIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjQzNjM0NDMsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2NDM2NzA0MywiaWF0IjoxNjY0MzYzNDQzLCJjaGFubmVsSWQiOiIiLCJqdGkiOiIyYTA4MmE3Zi02ZDk3LTJhNzgtN2JjMC1hZDM5ZGFhZTZhZWYifQ.HdcQjHKTOhnsL-A7nEdu6Y3WLXhTiLbIl-cZhT4nlywXGmg_1VqmA4SVXiBpBAFwwC-amLgxO-PWC3dJOrJX6fHkmSpIAknNkeefCeEzyYTw9HyZkf7yS61fnXzKSMiMjRyvc3jK30NrGsClSqNT9fjSwV-HVZnZTBx4f0pzM5XPnqsnLRigdD3zgslWoMS-gaiNFXmZR2U_SXm43D4D4RU0isgf9PJ6YZIO_1a4ZNSlbXNJiOwE68U4su-RsI7EDJ3eDihq1uPQk3GuvSEcY1UGYpNdynF9fU5GWzr_0Px8y1gHuIln6RUp9HoQEWh1pAFBpyOpxgdSQK9837EbqQ",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{ShiptoOrderPlaced}}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/{{JSONENV}}/deep/v1/events/FulfillmentOrderCreated",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"{{JSONENV}}",
+								"deep",
+								"v1",
+								"events",
+								"FulfillmentOrderCreated"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. OrderAccepted",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "44cb6c97-1f97-4658-8e41-c228d18fb05e",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"id": "006a5656-c2d2-4035-97dd-e2c690206759",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// 1. Sets Delay if specified in Collection Variable\r",
+									"// 2. Checks if there are any Device_ESIM products\r",
+									"// 3. If no Device_ESIM products, skips to OrderShipped request\r",
+									"// 4. Resources are extracted and stored accordingly\r",
+									"\r",
+									"// Optional Delay\r",
+									"const delay = parseInt(pm.collectionVariables.get(\"Delay\") || \"0\");\r",
+									"if (delay) {\r",
+									"    console.log(`⏳ Waiting for ${delay / 1000} seconds before proceeding...`);\r",
+									"    const start = Date.now();\r",
+									"    while (Date.now() - start < delay) {}\r",
+									"    console.log(\"✅ Delay complete.\");\r",
+									"}\r",
+									"\r",
+									"//////////////////////////////\r",
+									"\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-4f8d908e-75a0-4866-b9a2-4a1e8389c82d",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYxNDI5MjU0ODI2Iiwic3RvcmVJZCI6IiIsInVzbiI6IjFiMDg1MGVjLTE1YjktNzQyMC0xZjRkLTVlYjM5MDlkMTEwMCIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjE0MjkyNTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MTQzMjg1NCwiaWF0IjoxNjYxNDI5MjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiIwY2MyZDNlMC02ZjRjLTlkODctMTk3Ny02ZWY1NGQ4YWQ2MjQifQ.rdb9Kfe2xBw_9_GZA8SI7l4G0XQ7c1VdW-LdSsPW0qx-8Z-22gA5AVSdG09V1KXp9Q9L3_qK6H01E-3bzdUXOA8L8JxmMgUlVOjxmwKFFRzKSUaSUaNxrWFdmxlXRtmDHgFd_Nr_LU4RWsnUoC1vwi1eaVJhgunwVh2X_tC3d-0c0SJSEBlBg9SYW19jHC7cz_FjM3BitR3ZdJCr-eENBouNiWecaHvTXEh0vVnJrhPgg2ROZS0NRiEQ88DHFX9WZIK5Nrin7tFGeuknGljdXUlP3r8_FpZiTkeRoiNpl_uAxGPYjuKrDvfVwzU69wTHd8K6Sqs-BuLkiupWaqh8RA",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{OrderAccepted}}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/{{JSONENV}}/deep/v1/events/FulfillmentOrderCreateAcknowledged",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"{{JSONENV}}",
+								"deep",
+								"v1",
+								"events",
+								"FulfillmentOrderCreateAcknowledged"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Resource Extraction",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "16e2a5ac-c7b6-4cbc-9422-458a736da68e",
+								"exec": [
+									"\r",
+									"\r",
+									"// ✅ Check if there are any Device_ESIM products\r",
+									"let productCount = 0;\r",
+									"while (pm.environment.get(`productType${productCount + 1}`)) {\r",
+									"  productCount++;\r",
+									"}\r",
+									"\r",
+									"let hasESIM = false;\r",
+									"\r",
+									"for (let i = 1; i <= productCount; i++) {\r",
+									"  const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"  if (finalType.includes(\"_ESIM\")) {\r",
+									"    hasESIM = true;\r",
+									"    break;\r",
+									"  }\r",
+									"}\r",
+									"\r",
+									"if (!hasESIM) {\r",
+									"  console.warn(\"⏭️ No Device_ESIM products found → skipping ReserveSIM, jumping to OrderShipped next.\");\r",
+									"  pm.execution.setNextRequest(\"3. OrderShipped\");\r",
+									"}\r",
+									"\r",
+									"\r",
+									"\r",
+									"/////////////////////////////////////////////////////////\r",
+									"\r",
+									"\r",
+									"// === Resource Extractor ===\r",
+									"\r",
+									"// ✅ 1️⃣ Get environment\r",
+									"// === ✅ Full Resource Extraction: USKU-safe ===\r",
+									"\r",
+									"const testEnv = (pm.collectionVariables.get(\"RESOURCE_EXT_ENV\") || pm.collectionVariables.get(\"Environment\") || \"DEFAULT\").toUpperCase();\r",
+									"\r",
+									"// ✅ 1️⃣ Resource quantity → set this yourself before\r",
+									"const resourceQuantity = parseInt(pm.environment.get(\"resourceQuantity\") || \"0\");\r",
+									"if (!resourceQuantity || resourceQuantity <= 0) {\r",
+									"  console.log(\"⏭️ Resource quantity is zero → skipping extraction and continuing.\");\r",
+									"  return; // ✅ Skip extraction, continue with request flow\r",
+									"}\r",
+									"\r",
+									"const resourceURL = `http://npe-esa-tsa-w2a-a03.lab.uprising.t-mobile.com:8000/automation/resource_extract/resource?test_environment=${testEnv}&tdm_service=Resource&quantity=${resourceQuantity}&denomination=0&ntid=Postman_Automation`;\r",
+									"\r",
+									"console.log(`🔗 Resource URL: ${resourceURL}`);\r",
+									"\r",
+									"// ✅ 2️⃣ Send request\r",
+									"pm.sendRequest({ url: resourceURL, method: 'GET' }, function (err, res) {\r",
+									"  if (err || !res || !res.text()) {\r",
+									"    console.error(\"❌ Resource request failed or empty response.\");\r",
+									"    pm.execution.setNextRequest(null);\r",
+									"    return;\r",
+									"  }\r",
+									"\r",
+									"  const html = res.text();\r",
+									"  const rowRegex = /<tr>\\s*<td>(\\d{15,20})<\\/td>\\s*<td>\\d+<\\/td>\\s*<td>(\\d{15})<\\/td>\\s*<td>(\\d{15})<\\/td>/g;\r",
+									"\r",
+									"  // === Find total products\r",
+									"  let totalProducts = 0;\r",
+									"  while (pm.environment.get(`productType${totalProducts + 1}`)) {\r",
+									"    totalProducts++;\r",
+									"  }\r",
+									"\r",
+									"  // ✅ 3️⃣ Build USKU pairs: SIM + Device_noplan with same MSISDN\r",
+									"  let uskuPairs = [];\r",
+									"  for (let i = 1; i <= totalProducts; i++) {\r",
+									"    const simType = (pm.environment.get(`product${i}_FinalSIMType`) || \"\").toUpperCase();\r",
+									"    const simMsisdn = (pm.environment.get(`product${i}_MSISDN`) || \"\").trim();\r",
+									"\r",
+									"    if (simType.startsWith(\"SIM\")) {\r",
+									"      for (let j = 1; j <= totalProducts; j++) {\r",
+									"        const devType = (pm.environment.get(`product${j}_FinalSIMType`) || \"\").toUpperCase();\r",
+									"        const devMsisdn = (pm.environment.get(`product${j}_MSISDN`) || \"\").trim();\r",
+									"        if (devType.includes(\"_NOPLAN\") && devMsisdn && devMsisdn === simMsisdn) {\r",
+									"          uskuPairs.push({ simIndex: i, deviceIndex: j });\r",
+									"          console.log(`🔗 USKU: Device${j}_noplan paired with SIM${i} (MSISDN: ${simMsisdn})`);\r",
+									"        }\r",
+									"      }\r",
+									"    }\r",
+									"  }\r",
+									"\r",
+									"  // ✅ 4️⃣ Build resourceConsumers (PSIMs & SIMs, skip ESIM/Accessory & covered noPlans)\r",
+									"  let resourceConsumers = [];\r",
+									"  for (let i = 1; i <= totalProducts; i++) {\r",
+									"    const finalType = (pm.environment.get(`product${i}_FinalSIMType`) || \"\").toUpperCase();\r",
+									"\r",
+									"    if (finalType.includes(\"_ESIM\") || finalType.includes(\"ACCESSORY\")) {\r",
+									"      continue; // skip ESIM & Accessory\r",
+									"    }\r",
+									"\r",
+									"    if (finalType.includes(\"_NOPLAN\")) {\r",
+									"      const covered = uskuPairs.some(pair => pair.deviceIndex === i);\r",
+									"      if (covered) continue; // skip USKU Device_noplan\r",
+									"    }\r",
+									"\r",
+									"    resourceConsumers.push(i);\r",
+									"  }\r",
+									"\r",
+									"  // ✅ 5️⃣ Assign resources\r",
+									"  let match;\r",
+									"  let assignedCount = 0;\r",
+									"\r",
+									"  for (let idx = 0; idx < resourceConsumers.length; idx++) {\r",
+									"    const productIndex = resourceConsumers[idx];\r",
+									"    const finalType = (pm.environment.get(`product${productIndex}_FinalSIMType`) || \"\").toUpperCase();\r",
+									"\r",
+									"    match = rowRegex.exec(html);\r",
+									"    if (!match) {\r",
+									"      console.error(`❌ Resource mismatch: expected ${resourceQuantity}, got only ${assignedCount}`);\r",
+									"      pm.execution.setNextRequest(null);\r",
+									"      return;\r",
+									"    }\r",
+									"\r",
+									"    const simNumber = match[1];\r",
+									"    const imei = match[2];\r",
+									"    const imsi = match[3];\r",
+									"\r",
+									"    if (finalType.includes(\"PSIM\")) {\r",
+									"      // ✅ Device_PSIM → needs SIM, IMEI, IMSI\r",
+									"      pm.environment.set(`device${productIndex}_simNumber`, simNumber);\r",
+									"      pm.environment.set(`device${productIndex}_imei1`, imei);\r",
+									"      pm.environment.set(`device${productIndex}_IMSI1`, imsi);\r",
+									"\r",
+									"      console.log(`📲 [PSIM] device${productIndex} → SIM=${simNumber} | IMEI=${imei} | IMSI=${imsi}`);\r",
+									"    } else if (finalType.startsWith(\"SIM\")) {\r",
+									"      // ✅ SIM-only → SIM + IMSI\r",
+									"      pm.environment.set(`device${productIndex}_simNumber`, simNumber);\r",
+									"      pm.environment.set(`device${productIndex}_IMSI1`, imsi);\r",
+									"      console.log(`📲 [SIM] device${productIndex} → SIM=${simNumber} | IMSI=${imsi}`);\r",
+									"    }\r",
+									"\r",
+									"    // ✅ USKU: If this SIM covers a Device_noplan, assign IMEI & IMSI there too\r",
+									"    uskuPairs.forEach(pair => {\r",
+									"      if (pair.simIndex === productIndex) {\r",
+									"        pm.environment.set(`device${pair.deviceIndex}_imei1`, imei);\r",
+									"        pm.environment.set(`device${pair.deviceIndex}_IMSI1`, imsi);\r",
+									"        console.log(`🔗 [USKU] Device${pair.deviceIndex}_noplan → IMEI=${imei} | IMSI=${imsi} (from SIM${pair.simIndex})`);\r",
+									"      }\r",
+									"    });\r",
+									"\r",
+									"    assignedCount++;\r",
+									"  }\r",
+									"\r",
+									"  console.log(`✅ Resource extraction done. Assigned ${assignedCount} of ${resourceQuantity}`);\r",
+									"});\r",
+									"\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"id": "7dad2d85-9397-4bda-952a-69fc256f9271",
+								"exec": [
+									"function generateRandomAlpha(length) {\r",
+									"    const chars = \"abcdefghijklmnopqrstuvwxyz\";\r",
+									"    let output = \"\";\r",
+									"    for (let i = 0; i < length; i++) {\r",
+									"        output += chars.charAt(Math.floor(Math.random() * chars.length));\r",
+									"    }\r",
+									"    return output;\r",
+									"}\r",
+									"\r",
+									"function generateRandomNumeric(length) {\r",
+									"    const digits = \"0123456789\";\r",
+									"    let output = \"\";\r",
+									"    for (let i = 0; i < length; i++) {\r",
+									"        output += digits.charAt(Math.floor(Math.random() * digits.length));\r",
+									"    }\r",
+									"    return output;\r",
+									"}\r",
+									"\r",
+									"// Compose final event ID\r",
+									"const alphaSegment = generateRandomAlpha(5);\r",
+									"const numberSegment = generateRandomNumeric(5);\r",
+									"const finalEventId = `Shipping_${alphaSegment}_${numberSegment}_testFromPostman`;\r",
+									"\r",
+									"// Store it\r",
+									"pm.environment.set(\"eventId\", finalEventId);\r",
+									"\r",
+									"console.log(`✅ Generated eventId: ${finalEventId}`);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-0ae2f045-279a-4788-9eb1-113f85a8ea55",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://postman-echo.com/get",
+							"protocol": "https",
+							"host": [
+								"postman-echo",
+								"com"
+							],
+							"path": [
+								"get"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "ReserveSIM",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "2b049d19-082d-4537-b288-aba30872a87e",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// -- 1. Check if there are any ESIM products in the order\r",
+									"// -- 2. If there are, select one ESIM product and assign an EID to it\r",
+									"// -- 3. If there are no ESIM products, skip the ReserveSIM step and move to the next request\r",
+									"\r",
+									"\r",
+									"// === ReserveSIM - Pre-request ===\r",
+									"\r",
+									"// ✅ Count how many products we have\r",
+									"let resourceProductCounter = 0;\r",
+									"while (pm.environment.get(`productType${resourceProductCounter + 1}`)) {\r",
+									"  resourceProductCounter++;\r",
+									"}\r",
+									"\r",
+									"let deviceESIMIndexes = [];\r",
+									"for (let i = 1; i <= resourceProductCounter; i++) {\r",
+									"  const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"  if (finalType.includes(\"_ESIM\")) {\r",
+									"    deviceESIMIndexes.push(i);\r",
+									"  }\r",
+									"}\r",
+									"\r",
+									"const totalDevices = deviceESIMIndexes.length;\r",
+									"\r",
+									"if (totalDevices === 0) {\r",
+									"  console.warn(\"⏭️ No Device_ESIM products found → Skipping ReserveSIM step.\");\r",
+									"  // ✅ Skip ReserveSIM and move to next request\r",
+									"  pm.execution.setNextRequest(null);\r",
+									"}\r",
+									"\r",
+									"// ✅ Continue if there are ESIMs\r",
+									"let currentIndex = pm.environment.get(\"ReserveSIM_DeviceIndex\");\r",
+									"if (!currentIndex) {\r",
+									"  // First time\r",
+									"  currentIndex = 1;\r",
+									"  pm.environment.set(\"ReserveSIM_DeviceIndex\", currentIndex);\r",
+									"} else {\r",
+									"  currentIndex = parseInt(currentIndex);\r",
+									"}\r",
+									"\r",
+									"const currentDeviceIndex = deviceESIMIndexes[currentIndex - 1];\r",
+									"console.log(`🔢 ReserveSIM for Device_ESIM index ${currentDeviceIndex} (${currentIndex} of ${totalDevices})`);\r",
+									"\r",
+									"// ✅ Pick EID for this device\r",
+									"const eidMasterRaw = pm.collectionVariables.get(\"EID_List\");\r",
+									"if (!eidMasterRaw) throw new Error(\"❌ Missing EID_List in collection variables.\");\r",
+									"\r",
+									"let eidWorkingRaw = pm.environment.get(\"EID_List_Working\");\r",
+									"let eidArray;\r",
+									"\r",
+									"if (!eidWorkingRaw) {\r",
+									"  eidArray = JSON.parse(eidMasterRaw);\r",
+									"} else {\r",
+									"  eidArray = JSON.parse(eidWorkingRaw);\r",
+									"  if (!eidArray.length) {\r",
+									"    eidArray = JSON.parse(eidMasterRaw);\r",
+									"  }\r",
+									"}\r",
+									"if (!eidArray.length) throw new Error(\"❌ EID list empty.\");\r",
+									"\r",
+									"const randomIndex = Math.floor(Math.random() * eidArray.length);\r",
+									"const selectedEid = eidArray[randomIndex];\r",
+									"eidArray.splice(randomIndex, 1);\r",
+									"pm.environment.set(\"EID_List_Working\", JSON.stringify(eidArray));\r",
+									"pm.environment.set(\"EID\", selectedEid);\r",
+									"pm.environment.set(`device${currentDeviceIndex}_EID`, selectedEid);\r",
+									"\r",
+									"console.log(`📌 EID for Device${currentDeviceIndex}_ESIM: ${selectedEid}`);\r",
+									"console.log(`📌 EIDs remaining: ${eidArray.length}`);\r",
+									"\r",
+									"// ✅ Store for post-request\r",
+									"pm.environment.set(\"ReserveSIM_DeviceIndex_Actual\", currentDeviceIndex);\r",
+									"\r",
+									"// ✅ Clear retry counter if new device\r",
+									"if (!pm.environment.get(\"reserveSimRetryCount\")) {\r",
+									"  pm.environment.set(\"reserveSimRetryCount\", \"0\");\r",
+									"}\r",
+									"\r",
+									"\r",
+									"////////////////////////////////////////////\r",
+									"\r",
+									"\r",
+									"// let password = pm.collectionVariables.get(\"password\");\r",
+									"//This script is only for TAG AUTH TOKEN\r",
+									"const isAuthenticationRequired = true; //if you don't need it then make is false\r",
+									"var token_env = 'qlab02'; // dev01 | dit01 | qlab02 | plab01 | prod\r",
+									"const add_mandatory_headers = true;\r",
+									"//if it is true , then it will add some headers automatically service-transaction-id, sender_id, channel_id, application_id and Content-Type='application/json' with the below values .\r",
+									"//Restricted Area Beyond this point , Do not scroll\r",
+									"token_env = token_env.toLowerCase();\r",
+									"var tokenUrl = `https://auth.${token_env}.npe.tedge.adn-gw.t-mobile.com/oauth2/v1/tokens`;\r",
+									"\r",
+									"if(token_env == 'qlab02' || token_env == 'plab01') {\r",
+									"    username = 'iiabR0XqY3GOHQOCLmZ7QyItAXvb5LUs';\r",
+									"    password = pm.collectionVariables.get(\"password\");\r",
+									"}\r",
+									"\r",
+									"if(isAuthenticationRequired) {\r",
+									"    console.log(`Token URL : ${tokenUrl}`);\r",
+									"    console.log(`username : ${username}`);\r",
+									"    console.log(`password : ${password}`);\r",
+									"    //Encoding Base64 of username and password to get Basic Token\r",
+									"    var encoded = btoa(`${username}:${password}`);\r",
+									"    console.log(`Encoded value: ${encoded}`);\r",
+									"    const basic_auth = `Basic ${encoded}`;\r",
+									"\r",
+									"    const getTokenRequest = {\r",
+									"    method: 'POST',\r",
+									"    url: tokenUrl,\r",
+									"    header: {\r",
+									"        'Accept' : 'application/json',\r",
+									"        'Postman-Token' : 'd4c10052-422f-4abc-9e29-e924a356b6a6',\r",
+									"        'cache-control' : 'no-cache',\r",
+									"        'Authorization' : basic_auth\r",
+									"        }\r",
+									"    };\r",
+									"    pm.sendRequest(getTokenRequest, (err, response) => {\r",
+									"    if(err) {\r",
+									"        console.log(err);\r",
+									"        if(err.code == 'ECONNREFUSED' || err.code == 'ETIMEDOUT')  \r",
+									"        { throw new Error(`Check Your VPN Connection or URL ${tokenUrl} not able to connect`);  }\r",
+									"        else if(err.code == 'ENOTFOUND')  \r",
+									"        { throw new Error(`Auth Token Error: Not able to connect to ${err.hostname}`); }\r",
+									"        else\r",
+									"        { \r",
+									"            console.log(`Error : ${err}`);\r",
+									"            throw new Error(\"Auth Token Error: Connect SDP Appgate or Check Console Logs. , open console by CTRL+ALT+C\");\r",
+									"        }\r",
+									"    } else if(response.code != '200') {\r",
+									"        console.log(response);\r",
+									"        if(response.status == 'Unauthorized')\r",
+									"        {throw new Error(\"username/password for Auth Token are incorrect.\");}\r",
+									"        else if(response.status == 'Method Not Allowed')\r",
+									"        {throw new Error(`Auth Token Error: Issue with Token URL : ${tokenUrl}`);}\r",
+									"        else \r",
+									"        {\r",
+									"            console.log(`Error : ${response}`);\r",
+									"            throw new Error(\"Auth Token Error: Check Console Logs. , open console by CTRL+ALT+C\");\r",
+									"        }\r",
+									"    } \r",
+									"    else {\r",
+									"    const jsonResponse = response.json();\r",
+									"    const newAccessToken = jsonResponse.access_token;\r",
+									"    const bearerToken = `Bearer ${newAccessToken}`;\r",
+									"    console.log(`access_token : ${bearerToken}`);\r",
+									"    //set Bearer token in the request\r",
+									"    pm.request.headers.add({key: \"Authorization\", value: bearerToken});\r",
+									"    }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"// if(add_mandatory_headers) {\r",
+									"    //   pm.request.headers.add({key: \"service-transaction-id\", value: service_transaction_id});\r",
+									"    //   pm.request.headers.add({key: \"Content-Type\", value: \"application/json\"});\r",
+									"//   }"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"id": "10e45c48-2fed-44f1-b0bc-914ca62d681c",
+								"exec": [
+									"// -- In this part of Script -\r",
+									"// ✅ Parse JSON body\r",
+									"// ✅ Check if resourceStatus is 'AA'\r",
+									"// ✅ If resourceStatus is not 'AA', retry up to 20 times\r",
+									"// ✅ If resourceStatus is 'AA', store serialNumber and imsi\r",
+									"// ✅ If Product 1 is ESIM → mark as firstSimLineImsi\r",
+									"// ✅ Continue to next Device_ESIM if any\r",
+									"// ✅ If all Device_ESIMs done, unset environment variables\r",
+									"\r",
+									"// === ReserveSIM - Post-request (JSON version) ===\r",
+									"\r",
+									"// ✅ Parse JSON body\r",
+									"const responseJson = pm.response.json();\r",
+									"\r",
+									"const resourceStatus = responseJson.resourceStatus || null;\r",
+									"const serialNumber = responseJson.serialNumber || null;\r",
+									"const imsi = responseJson.imsi || null;\r",
+									"\r",
+									"const currentDeviceIndex = parseInt(pm.environment.get(\"ReserveSIM_DeviceIndex_Actual\"));\r",
+									"const retryCount = parseInt(pm.environment.get(\"reserveSimRetryCount\")) || 0;\r",
+									"\r",
+									"console.log(`📦 resourceStatus: ${resourceStatus}`);\r",
+									"console.log(`📦 serialNumber: ${serialNumber}`);\r",
+									"console.log(`📦 imsi: ${imsi}`);\r",
+									"\r",
+									"if (resourceStatus !== 'AA') {\r",
+									"  if (retryCount < 20) {\r",
+									"    pm.environment.set('reserveSimRetryCount', retryCount + 1);\r",
+									"    console.log(`⏳ Device${currentDeviceIndex}_ESIM: Waiting for AA. Retry #${retryCount + 1}`);\r",
+									"    pm.execution.setNextRequest(pm.info.requestName);\r",
+									"  } else {\r",
+									"    console.error(`❌ Device${currentDeviceIndex}_ESIM: Max retries reached.`);\r",
+									"    pm.environment.unset('reserveSimRetryCount');\r",
+									"    pm.environment.unset('ReserveSIM_DeviceIndex');\r",
+									"    pm.environment.unset('ReserveSIM_DeviceIndex_Actual');\r",
+									"    throw new Error(`ReserveSIM failed for Device${currentDeviceIndex}_ESIM after 20 retries.`);\r",
+									"  }\r",
+									"} else {\r",
+									"  console.log(`✅ Device${currentDeviceIndex}_ESIM: resourceStatus is AA`);\r",
+									"  pm.environment.unset('reserveSimRetryCount');\r",
+									"\r",
+									"  if (imsi) {\r",
+									"    const varName = `device${currentDeviceIndex}_IMSI1`;\r",
+									"    pm.environment.set(varName, imsi);\r",
+									"    console.log(`✅ Stored IMSI → ${varName} = ${imsi}`);\r",
+									"  }\r",
+									"\r",
+									"  if (serialNumber) {\r",
+									"    const serialVar = `device${currentDeviceIndex}_SerialNumber`;\r",
+									"    pm.environment.set(serialVar, serialNumber);\r",
+									"    console.log(`✅ Stored SerialNumber → ${serialVar} = ${serialNumber}`);\r",
+									"  }\r",
+									"\r",
+									"  // ✅ Continue to next Device_ESIM if any\r",
+									"  let reserveIndex = parseInt(pm.environment.get(\"ReserveSIM_DeviceIndex\"));\r",
+									"  let totalProducts = 0;\r",
+									"  while (pm.environment.get(`productType${totalProducts + 1}`)) {\r",
+									"    totalProducts++;\r",
+									"  }\r",
+									"\r",
+									"  let actualDeviceCount = 0;\r",
+									"  for (let i = 1; i <= totalProducts; i++) {\r",
+									"    const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"    if (finalType.includes(\"_ESIM\")) {\r",
+									"      actualDeviceCount++;\r",
+									"    }\r",
+									"  }\r",
+									"\r",
+									"  if (reserveIndex < actualDeviceCount) {\r",
+									"    pm.environment.set(\"ReserveSIM_DeviceIndex\", reserveIndex + 1);\r",
+									"    pm.execution.setNextRequest(pm.info.requestName); // loop to next ESIM\r",
+									"  } else {\r",
+									"    console.log(`🎉 All Device_ESIMs done!`);\r",
+									"    pm.environment.unset(\"ReserveSIM_DeviceIndex\");\r",
+									"    pm.environment.unset(\"ReserveSIM_DeviceIndex_Actual\");\r",
+									"  }\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-6988ce43-39dc-4fe0-9e20-98d8e5f61fd0",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"protocolVersion": "auto",
+						"disabledSystemHeaders": {},
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"brandId\": \"TMO\",\n\t\"serialNumber\": \"{{EID}}\",\n\t\"overrideProfile\": true\n}"
+						},
+						"url": {
+							"raw": "https://dtiisr-esimmanagement-reserve-esim-v1.{{ESP}}.npe.tedge.adn-gw.t-mobile.com/devicemanagement/v1/reserve-esim",
+							"protocol": "https",
+							"host": [
+								"dtiisr-esimmanagement-reserve-esim-v1",
+								"{{ESP}}",
+								"npe",
+								"tedge",
+								"adn-gw",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"devicemanagement",
+								"v1",
+								"reserve-esim"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. OrderShipped",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "750c05a6-cbb0-4976-87b5-cb0c9480b5df",
+								"exec": [
+									"// -- In this script\r",
+									"// 1. Resource Extraction and is done, later carefully assigned each resource to specific product\r",
+									"// 2. Event ID is generated\r",
+									"// 3. line Item block is generated as per the product and passed to the request.\r",
+									"\r",
+									"///////////////////////////////////////////\r",
+									"\r",
+									"const shippedDate = new Date().toISOString().split('T')[0];\r",
+									"pm.environment.set(\"shippedDate\", shippedDate);\r",
+									"\r",
+									"//////////////////////////////////////////\r",
+									"\r",
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									"\r",
+									"\r",
+									"\r",
+									"// === Generate lineItem array ONLY (no extra wrapper) ===\r",
+									"\r",
+									"// === Generate lineItem array ONLY ===\r",
+									"\r",
+									"let totalProducts = 0;\r",
+									"while (pm.environment.get(`productType${totalProducts + 1}`)) {\r",
+									"  totalProducts++;\r",
+									"}\r",
+									"\r",
+									"let lineItems = [];\r",
+									"\r",
+									"for (let i = 1; i <= totalProducts; i++) {\r",
+									"  const finalType = pm.environment.get(`product${i}_FinalSIMType`) || \"\";\r",
+									"  const productType = pm.environment.get(`productType${i}`) || \"\";\r",
+									"  const sku = pm.environment.get(`product${i}_SKU`) || \"\";\r",
+									"  const skuDesc = pm.environment.get(`product${i}_skuDesc`) || \"\";\r",
+									"  const msisdn = pm.environment.get(`product${i}_MSISDN`) || \"\";\r",
+									"  const orderDetailID = pm.environment.get(`product${i}_OrderLineID`) || \"\";\r",
+									"\r",
+									"  // === Build IMEI/SIM block ===\r",
+									"  let imeiSimBlock = {\r",
+									"    sequenceNo: \"1\",\r",
+									"    orderDetailID: orderDetailID\r",
+									"  };\r",
+									"\r",
+									"  if (finalType.includes(\"_PSIM\")) {\r",
+									"    imeiSimBlock.imeiNumber = pm.environment.get(`device${i}_imei1`) || \"\";\r",
+									"    imeiSimBlock.simNumber = pm.environment.get(`device${i}_simNumber`) || \"\";\r",
+									"  } else if (finalType.includes(\"_ESIM\")) {\r",
+									"    imeiSimBlock.imeiNumber = pm.environment.get(`device${i}_imei1`) || \"\";\r",
+									"    imeiSimBlock.imeiNumber2 = pm.environment.get(`device${i}_imei2`) || \"\";\r",
+									"    imeiSimBlock.EID = pm.environment.get(`device${i}_EID`) || \"\";\r",
+									"  } else if (finalType.includes(\"_noplan\")) {\r",
+									"    imeiSimBlock.imeiNumber = pm.environment.get(`device${i}_imei1`) || \"\";\r",
+									"  } else if (finalType.startsWith(\"SIM\")) {\r",
+									"    imeiSimBlock.simNumber = pm.environment.get(`device${i}_simNumber`) || \"\";\r",
+									"  }\r",
+									"  // For Accessory: no IMEI/SIM — but keep sequenceNo + orderDetailID only\r",
+									"\r",
+									"  // === Build lineItem block ===\r",
+									"  let itemBlock = {};\r",
+									"\r",
+									"  itemBlock.imeiSim = [imeiSimBlock];\r",
+									"\r",
+									"  itemBlock.orderedQuantity = \"1.000\";\r",
+									"  itemBlock.materialGroup = \"DATK\";\r",
+									"  itemBlock.itemPricing = {\r",
+									"    shippingTotal: 0,\r",
+									"    totalAmount: 0,\r",
+									"    netAmount: 0,\r",
+									"    discountAmount: 0,\r",
+									"    remainingBalance: 0,\r",
+									"    salesTax: 0\r",
+									"  };\r",
+									"  itemBlock.lineType = \"ISP\";\r",
+									"  itemBlock.skuDesc = skuDesc;\r",
+									"  itemBlock.sku = sku;\r",
+									"\r",
+									"  // ✅ Omit msisdn ONLY for Accessory\r",
+									"  if (!finalType.toUpperCase().includes(\"ACCESSORY\")) {\r",
+									"    itemBlock.msisdn = msisdn;\r",
+									"  }\r",
+									"\r",
+									"  itemBlock.lineItemNumber = orderDetailID;\r",
+									"  itemBlock.trackingNumber = \"1Z3V891R0209695907\";\r",
+									"  itemBlock.productType = productType;\r",
+									"\r",
+									"  lineItems.push(itemBlock);\r",
+									"\r",
+									"  console.log(`✅ lineItem for product${i} → FinalType=${finalType}`);\r",
+									"}\r",
+									"\r",
+									"pm.environment.set(\"generatedLineItems\", JSON.stringify(lineItems, null, 2));\r",
+									"console.log(\"✅ Final generatedLineItems array saved → Accessory logic: IMEI/SIM skipped except for sequenceNo+orderDetailID, no msisdn.\");\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-5204c9c1-0c92-409b-8a35-b10dc54ce6c8",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYxNDI5MjU0ODI2Iiwic3RvcmVJZCI6IiIsInVzbiI6IjFiMDg1MGVjLTE1YjktNzQyMC0xZjRkLTVlYjM5MDlkMTEwMCIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjE0MjkyNTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MTQzMjg1NCwiaWF0IjoxNjYxNDI5MjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiIwY2MyZDNlMC02ZjRjLTlkODctMTk3Ny02ZWY1NGQ4YWQ2MjQifQ.rdb9Kfe2xBw_9_GZA8SI7l4G0XQ7c1VdW-LdSsPW0qx-8Z-22gA5AVSdG09V1KXp9Q9L3_qK6H01E-3bzdUXOA8L8JxmMgUlVOjxmwKFFRzKSUaSUaNxrWFdmxlXRtmDHgFd_Nr_LU4RWsnUoC1vwi1eaVJhgunwVh2X_tC3d-0c0SJSEBlBg9SYW19jHC7cz_FjM3BitR3ZdJCr-eENBouNiWecaHvTXEh0vVnJrhPgg2ROZS0NRiEQ88DHFX9WZIK5Nrin7tFGeuknGljdXUlP3r8_FpZiTkeRoiNpl_uAxGPYjuKrDvfVwzU69wTHd8K6Sqs-BuLkiupWaqh8RA",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"eventId\": \"{{eventId}}\",\n    \"eventType\": \"SupplyChainShipConfirmed\",\n    \"eventTime\": \"{{currentDateTime}}\",\n    \"eventProducerId\": \"SupplyChain\",\n    \"specifications\": [],\n    \"auditInfo\": {\n        \"accountNumber\": \"{{BAN}}\",\n        \"orderId\": \"{{OrderId}}\"\n    },\n    \"payload\": {\n        \"feOrderDate\": \"{{currentDateTime1}}\",\n        \"lineItem\": {{generatedLineItems}},\n        \"customerProfile\": {\n            \"customerLanguage\": \"EN\",\n            \"billingInfo\": {\n                \"name\": \"TEST APOLLO\",\n                \"billingAddressInfo\": {\n                    \"province\": \"GA\",\n                    \"city\": \"Atlanta\",\n                    \"countryCode\": \"US\",\n                    \"postalCode\": \"30346-0000\",\n                    \"addressLine1\": \"1 Ravinia Dr\",\n                    \"stateCode\": \"GA\"\n                }\n            },\n            \"deliveryInfo\": {\n                \"deliveryAddressInfo\": {\n                    \"province\": \"GA\",\n                    \"city\": \"Atlanta\",\n                    \"countryCode\": \"US\",\n                    \"postalCode\": \"30346-0000\",\n                    \"addressLine1\": \"1 Ravinia Dr\",\n                    \"stateCode\": \"GA\"\n                },\n                \"name\": \"TEST APOLLO\"\n            },\n            \"paperlessBill\": false,\n            \"customerEmail\": \"TEST.POSTMAN_AUTOMATION@T-Mobile.com\",\n            \"remItInfo\": {\n                \"name\": \"TEST APOLLO\",\n                \"paymentAddressInfo\": {\n                    \"province\": \"GA\",\n                    \"city\": \"Atlanta\",\n                    \"countryCode\": \"US\",\n                    \"postalCode\": \"30346-0000\",\n                    \"addressLine1\": \"1 Ravinia Dr\",\n                    \"stateCode\": \"GA\"\n                }\n            },\n            \"customerName\": \"TEST APOLLO\",\n            \"ban\": \"{{BAN}}\"\n        },\n        \"feOrderNum\": \"{{OrderId}}\",\n        \"orderPricing\": {\n            \"shippingTotal\": 0,\n            \"totalAmount\": 0,\n            \"netAmount\": 0,\n            \"discountAmount\": 0,\n            \"salesTax\": 0\n        },\n        \"supplyChain\": {\n            \"esdDate\": \"07/13/2020-07/15/2020\",\n            \"orderReason\": \"NAO\",\n            \"forwardOrderNumber\": \"{{SAPorderID}}\",\n            \"orderNumber\": \"{{OrderId}}\",\n            \"orderReasonDesc\": \"{{orderReasonDesc}}\",\n            \"documentType\": \"ZEO7\",\n            \"shipMethod\": \"Ground Service\",\n            \"shipMethodCode\": \"FEDEX\",\n            \"deliveryOrderNumber\": \"789345789345\",\n            \"channelName\": \"DF 1800 T-Mobile\",\n            \"orderDate\": \"{{currentDateTime1}}\",\n            \"shippedDate\": \"{{shippedDate}}\",\n            \"channelId\": 20\n        }\n    }\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/{{JSONENV}}/deep/v1/events/SupplyChainShipConfirmed",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"{{JSONENV}}",
+								"deep",
+								"v1",
+								"events",
+								"SupplyChainShipConfirmed"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4. ReceiptCreated",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "22189d9b-1583-424a-806d-14703a856d32",
+								"exec": [
+									"// === Generate compact OrderLineId / SKU block ===\r",
+									"\r",
+									"// 1️⃣ Count total products\r",
+									"let totalProducts = 0;\r",
+									"while (pm.environment.get(`productType${totalProducts + 1}`)) {\r",
+									"  totalProducts++;\r",
+									"}\r",
+									"\r",
+									"let skuBlocks = [];\r",
+									"\r",
+									"// 2️⃣ Build for each product\r",
+									"for (let i = 1; i <= totalProducts; i++) {\r",
+									"  const sku = pm.environment.get(`product${i}_SKU`) || \"\";\r",
+									"  const orderDetailID = pm.environment.get(`product${i}_OrderLineID`) || \"\";\r",
+									"\r",
+									"  let block = {\r",
+									"    lineId: orderDetailID,\r",
+									"    sku: sku,\r",
+									"    orderItemID: orderDetailID\r",
+									"  };\r",
+									"\r",
+									"  skuBlocks.push(block);\r",
+									"  console.log(`✅ Added OrderLineId-SKU block: Product${i} → ${JSON.stringify(block)}`);\r",
+									"}\r",
+									"\r",
+									"// 3️⃣ Add SpecialSku blocks if they exist\r",
+									"const specialSku1 = pm.environment.get(\"SpecialSku_1\");\r",
+									"const specialSku1OrderID = pm.environment.get(\"SpecialSku_1_OrderDetailID\");\r",
+									"if (specialSku1 && specialSku1OrderID) {\r",
+									"  skuBlocks.push({\r",
+									"    lineId: specialSku1OrderID,\r",
+									"    sku: specialSku1,\r",
+									"    orderItemID: \"12\"\r",
+									"  });\r",
+									"  console.log(`✅ Added SpecialSku_1 block: ${specialSku1} → OrderDetailID: ${specialSku1OrderID}`);\r",
+									"}\r",
+									"\r",
+									"const specialSku2 = pm.environment.get(\"SpecialSku_2\");\r",
+									"const specialSku2OrderID = pm.environment.get(\"SpecialSku_2_OrderDetailID\");\r",
+									"if (specialSku2 && specialSku2OrderID) {\r",
+									"  skuBlocks.push({\r",
+									"    lineId: specialSku2OrderID,\r",
+									"    sku: specialSku2,\r",
+									"    orderItemID: \"12\"\r",
+									"  });\r",
+									"  console.log(`✅ Added SpecialSku_2 block: ${specialSku2} → OrderDetailID: ${specialSku2OrderID}`);\r",
+									"}\r",
+									"\r",
+									"// ✅ Save whole block to env\r",
+									"pm.environment.set(\"generatedSkuBlocks\", JSON.stringify(skuBlocks, null, 2));\r",
+									"console.log(\"✅ Final generatedSkuBlocks array saved → includes standard & SpecialSku items.\");\r",
+									"\r",
+									"\r",
+									"\r",
+									"////////////////////////////////////////////////////\r",
+									"\r",
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									"\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"id": "c09eb474-b09d-40ae-9f5c-e5e83b590187",
+								"exec": [
+									"// === Check if only Accessories are in the order ===\r",
+									"\r",
+									"let totalProducts = 0;\r",
+									"while (pm.environment.get(`productType${totalProducts + 1}`)) {\r",
+									"  totalProducts++;\r",
+									"}\r",
+									"\r",
+									"let hasNonAccessory = false;\r",
+									"\r",
+									"for (let i = 1; i <= totalProducts; i++) {\r",
+									"  const type = (pm.environment.get(`productType${i}`) || \"\").toUpperCase();\r",
+									"  if (type === \"DEVICE\" || type === \"SIM\") {\r",
+									"    hasNonAccessory = true;\r",
+									"    break; // no need to check further\r",
+									"  }\r",
+									"}\r",
+									"\r",
+									"if (!hasNonAccessory) {\r",
+									"  console.log(\"📦 Only Accessories in order — skipping OrderDelivered & FirstIMEI.\");\r",
+									"  pm.execution.setNextRequest(null); // ⛔ Stop further execution\r",
+									"} else {\r",
+									"  pm.execution.setNextRequest(\"5. OrderDelivered\"); // ✅ Continue with next request\r",
+									"}\r",
+									"\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-66345f88-a01f-4d31-bce1-61194f2c223e",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYxNDI5MjU0ODI2Iiwic3RvcmVJZCI6IiIsInVzbiI6IjFiMDg1MGVjLTE1YjktNzQyMC0xZjRkLTVlYjM5MDlkMTEwMCIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjE0MjkyNTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MTQzMjg1NCwiaWF0IjoxNjYxNDI5MjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiIwY2MyZDNlMC02ZjRjLTlkODctMTk3Ny02ZWY1NGQ4YWQ2MjQifQ.rdb9Kfe2xBw_9_GZA8SI7l4G0XQ7c1VdW-LdSsPW0qx-8Z-22gA5AVSdG09V1KXp9Q9L3_qK6H01E-3bzdUXOA8L8JxmMgUlVOjxmwKFFRzKSUaSUaNxrWFdmxlXRtmDHgFd_Nr_LU4RWsnUoC1vwi1eaVJhgunwVh2X_tC3d-0c0SJSEBlBg9SYW19jHC7cz_FjM3BitR3ZdJCr-eENBouNiWecaHvTXEh0vVnJrhPgg2ROZS0NRiEQ88DHFX9WZIK5Nrin7tFGeuknGljdXUlP3r8_FpZiTkeRoiNpl_uAxGPYjuKrDvfVwzU69wTHd8K6Sqs-BuLkiupWaqh8RA",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"eventId\": \"{{eventId}}\",\n    \"eventType\": \"SupplyChainInvoiceCreated\",\n    \"eventTime\": \"{{currentDateTime}}\",\n    \"eventProducerId\": \"SupplyChain\",\n    \"specifications\": [],\n    \"auditInfo\": {\n        \"iamUniqueId\": \"{{eventId}}\",\n        \"batchId\": \"{{eventId}}\",\n        \"orderId\": \"{{OrderId}}\"\n    },\n    \"headerReference\": {\n        \"activityId\": \"{{eventId}}\",\n        \"applicationId\": \"ECC\",\n        \"channelId\": \"SupplyChain\",\n        \"interactionId\": \"{{eventId}}\",\n        \"sessionId\": \"{{eventId}}\"\n    },\n    \"payload\": {\n        \"order\": {\n            \"documentType\": \"ZEO7\",\n            \"channel\": \"TELESALES\",\n            \"ban\": \"{{BAN}}\",\n            \"orderNumber\": \"{{OrderId}}\",\n            \"sapOrderNumber\": \"{{SAPorderID}}\",\n            \"orderItem\": {{generatedSkuBlocks}}\n        },\n        \"delivery\": {\n            \"carrierName\": \"UPS\",\n            \"deliveryNumber\": \"0847904937\"\n        },\n        \"billing\": {\n            \"chargeAmount\": \"{{product_netAmount}}\",\n            \"totalAmount\": \"{{product_totalAmount}}\",\n            \"extendedAmount\": \"{{product_totalAmount}}\",\n            \"paymentID\": \"{{PaymentID}}\",\n            \"billingItem\": [\n                {\n                    \"itemId\": \"000010\",\n                    \"refOrderLineId\": \"000010\",\n                    \"totalTaxAmount\": \"0.88\",\n                    \"unitListPrice\": \"10.00\",\n                    \"amount\": \"10.00\"\n                },\n                {\n                    \"itemId\": \"000020\",\n                    \"refOrderLineId\": \"000020\",\n                    \"totalTaxAmount\": \"0.88\",\n                    \"unitListPrice\": \"0.00\",\n                    \"amount\": \"10.00\"\n                },\n                {\n                    \"itemId\": \"000030\",\n                    \"refOrderLineId\": \"000030\",\n                    \"totalTaxAmount\": \"0.88\",\n                    \"unitListPrice\": \"25.00\",\n                    \"amount\": \"25.00\"\n                },\n                {\n                    \"itemId\": \"000040\",\n                    \"refOrderLineId\": \"000040\",\n                    \"totalTaxAmount\": \"0.88\",\n                    \"unitListPrice\": \"0.00\",\n                    \"amount\": \"0.00\"\n                }\n            ]\n        }\n    }\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/{{JSONENV}}/deep/v1/events/SupplyChainInvoiceCreated",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"{{JSONENV}}",
+								"deep",
+								"v1",
+								"events",
+								"SupplyChainInvoiceCreated"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "5. OrderDelivered",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "a88b9601-93b6-457c-baaf-ce4b8b8ba77c",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-8050d015-7e39-4bd4-a5b7-8a01550444e4",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/EventWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r\n   <soapenv:Body>\r\n      <v1:notifyIncomingEventRequest serviceTransactionId=\"{{eventId}}\" version=\"\">\r\n         <base:header>\r\n            <base:sender>\r\n               <base:senderId>10</base:senderId>\r\n               <base:channelId>10</base:channelId>\r\n               <base:applicationId>SAP</base:applicationId>\r\n               <base:applicationUserId>JOHND</base:applicationUserId>\r\n            </base:sender>\r\n         </base:header>\r\n         <v1:event eventId=\"78934578935\">\r\n            <v1:eventType>OrderDelivered</v1:eventType>\r\n            <v1:eventTime>{{currentDateTime2}}</v1:eventTime>\r\n         </v1:event>\r\n         <v1:orderPayload orderId=\"{{OrderId}}\">\r\n            <!--The Shipping Information. The id is the tracking number-->\r\n            <v1:shipping id=\"HKFJ68H6S5FKFH77\">\r\n               <v1:freightCarrier>FEDEX</v1:freightCarrier>\r\n               <v1:shipFrom>\r\n                  <v1:websiteCommunication>\r\n                     <v1:websiteURI>https:www.fedex.com/track.jsp?id=HKFJ68H6S5FKFH77</v1:websiteURI>\r\n                  </v1:websiteCommunication>\r\n               </v1:shipFrom>\r\n               <v1:note>\r\n                  <v1:noteType>deliveryNumber</v1:noteType>\r\n                  <v1:content>789345789345</v1:content>\r\n               </v1:note>\r\n               <v1:actualDeliveryTime>{{currentDateTime2}}</v1:actualDeliveryTime>\r\n            </v1:shipping>\r\n            <v1:orderAttachment>\r\n               <v1:signatureRequiredIndicator>true</v1:signatureRequiredIndicator>\r\n            </v1:orderAttachment>\r\n            <v1:lastUpdateDate>{{currentDateTime2}}</v1:lastUpdateDate>\r\n         </v1:orderPayload>\r\n      </v1:notifyIncomingEventRequest>\r\n   </soapenv:Body>\r\n</soapenv:Envelope>",
+							"options": {
+								"raw": {
+									"language": "xml"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://{{XMLENV}}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/EventWSIL",
+							"protocol": "http",
+							"host": [
+								"{{XMLENV}}-esa-wsa-w2a-a01",
+								"lab",
+								"uprising",
+								"t-mobile",
+								"com"
+							],
+							"port": "10032",
+							"path": [
+								"services",
+								"EventWSIL"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "6. FirstIMEI",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "c416b6bb-042b-4779-ba87-840f3893337c",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-aec9a1b7-b1a8-4fdc-8fe2-f14d0a768ffb",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/EventWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r\n   <soapenv:Body>\r\n      <v1:notifyIncomingEventRequest serviceTransactionId=\"{{eventId}}\">\r\n         <base:header>\r\n            <base:sender>\r\n               <base:senderId>SAP_CARE</base:senderId>\r\n               <base:channelId>CARE</base:channelId>\r\n               <base:applicationId>SAP_CARE</base:applicationId>\r\n               <base:applicationUserId>SHAQUE4</base:applicationUserId>\r\n               <sessionId xmlns=\"http://services.tmobile.com/base\">{{eventId}}</sessionId>\r\n               <activityId xmlns=\"http://services.tmobile.com/base\">{{eventId}}</activityId>\r\n               <timestamp xmlns=\"http://services.tmobile.com/base\">{{currentDateTime2}}</timestamp>\r\n            </base:sender>\r\n         </base:header>\r\n         <v1:event>\r\n            <v1:eventType>FirstIMEI</v1:eventType>\r\n         </v1:event>\r\n         <v1:orderPayload>\r\n            <v1:orderLine>\r\n               <v1:networkResource>\r\n                  <v1:imei>{{device1_imei1}}</v1:imei>\r\n               </v1:networkResource>\r\n               <v1:networkResource>\r\n                  <v1:sim>\r\n                     <v1:imsi>{{device1_IMSI1}}</v1:imsi>\r\n                  </v1:sim>\r\n               </v1:networkResource>\r\n            </v1:orderLine>\r\n         </v1:orderPayload>\r\n      </v1:notifyIncomingEventRequest>\r\n   </soapenv:Body>\r\n</soapenv:Envelope>",
+							"options": {
+								"raw": {
+									"language": "xml"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://{{XMLENV}}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/EventWSIL",
+							"protocol": "http",
+							"host": [
+								"{{XMLENV}}-esa-wsa-w2a-a01",
+								"lab",
+								"uprising",
+								"t-mobile",
+								"com"
+							],
+							"port": "10032",
+							"path": [
+								"services",
+								"EventWSIL"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "21626076-b19ba3a3-5ec1-4148-a176-5607d8ad9009",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "49a94be7-c5fa-48ff-86d2-a33bf959a17c",
+						"type": "text/javascript",
+						"packages": {},
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "3c649e83-2011-44c6-b965-3ab5b965a975",
+						"type": "text/javascript",
+						"packages": {},
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Exchange (SimKitFee Return)",
+			"item": [
+				{
+					"name": "Fetch Deepio_SAPORDERID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"\r",
+									"// Step 1: Parse the response body to get the JSON object\r",
+									"const responseJson = pm.response.json();\r",
+									"\r",
+									"// Step 2: Extract the 'payload' string from the response\r",
+									"const payloadString = responseJson.payload;\r",
+									"\r",
+									"// Step 3: Convert the 'payload' string to a JSON object\r",
+									"const payloadJson = JSON.parse(payloadString);\r",
+									"\r",
+									"// Step 4: Store the converted JSON object in a variable\r",
+									"pm.environment.set(\"OrderAccepted\", JSON.stringify(payloadJson));\r",
+									"\r",
+									"// Step 5: Log the converted payload to the console\r",
+									"console.log(\"Converted Payload JSON from OrderAccepted:\", payloadJson);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"id": "69b24c91-dd35-4325-bb0a-5ab88f8500a2"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"\r",
+									"let env = pm.collectionVariables.get(\"Environment\");\r",
+									"let jsonEnv, xmlEnv;\r",
+									"\r",
+									"if (env) {\r",
+									"    env = env.toUpperCase();\r",
+									"\r",
+									"    switch (env) {\r",
+									"        case \"DEV2\":\r",
+									"            jsonEnv = \"ilab02\";\r",
+									"            xmlEnv = \"d02\";\r",
+									"            break;\r",
+									"        case \"DEV7\":\r",
+									"            jsonEnv = \"ilab03\";\r",
+									"            xmlEnv = \"d07\";\r",
+									"            break;\r",
+									"        case \"DEV8\":\r",
+									"            jsonEnv = \"ilab04\";\r",
+									"            xmlEnv = \"d08\";\r",
+									"            break;\r",
+									"        case \"QLAB02\":\r",
+									"            jsonEnv = \"qlab02\";\r",
+									"            xmlEnv = \"ql2\";\r",
+									"            break;\r",
+									"        case \"QLAB03\":\r",
+									"            jsonEnv = \"qlab03\";\r",
+									"            xmlEnv = \"ql3\";\r",
+									"            break;\r",
+									"        case \"QLAB07\":\r",
+									"            jsonEnv = \"qlab07\";\r",
+									"            xmlEnv = \"ql7\";\r",
+									"            break;\r",
+									"        default:\r",
+									"            console.log(`⚠️ No mapping defined for Environment: ${env}`);\r",
+									"    }\r",
+									"\r",
+									"    if (jsonEnv && xmlEnv) {\r",
+									"        pm.environment.set(\"JSONENV\", jsonEnv);  // ✅ Set as environment variable\r",
+									"        pm.environment.set(\"XMLENV\", xmlEnv);    // ✅ Set as environment variable\r",
+									"        console.log(`✅ Environment: ${env}`);\r",
+									"        console.log(`→ JSONENV set to: ${jsonEnv}`);\r",
+									"        console.log(`→ XMLENV set to: ${xmlEnv}`);\r",
+									"    }\r",
+									"} else {\r",
+									"    console.log(\"⚠️ Environment variable is not set in collection variables.\");\r",
+									"}\r",
+									"\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"id": "2939da4a-74b5-43c5-8698-454434ab0cc7"
+							}
+						}
+					],
+					"id": "21626076-ba23c9c4-c161-44e8-9282-4141a9343485",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYwMjk4NjU0Mzk5Iiwic3RvcmVJZCI6IiIsInVzbiI6IjNmNjY0NmFkLTQwZmUtYzFkOC05ZDdmLTBkY2Y5NGRlYTk5NyIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjAyOTg2NTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MDMwMjI1NCwiaWF0IjoxNjYwMjk4NjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI5MjQ0N2QwOC01MDQ0LWI1MjUtNjgxNi0yZjQwNmJhNDBkYzMifQ.fHt1cwhzX_W_WtUMSuIlnTCyVGXwpnnLCbBcbTcFalgudYBnor9xx_GLrkH7roLuWAcYeM4cNsSA-WXwnXTfCLyPqYR7QjjYiOKCjvgrCbO0TP-duc5RWg2w9CT8WwTFx9mIPz_y19wYjMPR1Kn_CfLyv-HOQPxkvakyz6Glq9mGO2IOHM9NNgZYohJfB32wU1f6YfYYGL-s1XFAkQBdq5TzHAaShIxJvSTZ8gfOkIz9yf_RMOHxhfxLfkFd0lHDwxo_V2_LqF0lfrW4R-6jdHDQl5jO6HSnE6l5l5kT4EZKqVbimr_T_e8lytxY8cDtv3tLCTuyk5fJYfInN94K5A",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"consumerFlag\" :  false ,\n  \"env\" :  \"{{ESP}}\" ,\n  \"eventName\" :  \"FulfillmentOrderCreateAcknowledged\" ,\n  \"key\" : \"orderId\" ,\n  \"value\" :  \"{{OrderId}}\" ,\n  \"payloadFlag\" :  true\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"api",
+								"deep",
+								"checker",
+								"v1",
+								"event",
+								"parameters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1. OrderAccepted (Required)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"id": "f614aded-7234-487c-872e-9733940353aa"
+							}
+						}
+					],
+					"id": "21626076-1646234c-47b9-4568-9926-18b442f936a6",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjY0NTM4MTQ5OTgxIiwic3RvcmVJZCI6IiIsInVzbiI6ImY3ZDgzNGU3LTY2YTgtMDhkYy1jOWJjLTQzNzQ3Njk3YTk0MCIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjQ1MzgxNTAsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2NDU0MTc1MCwiaWF0IjoxNjY0NTM4MTUwLCJjaGFubmVsSWQiOiIiLCJqdGkiOiJmMmRlNjhkMC0xMTBmLTgwN2UtOTRkYy00ODc2MzE0M2NiOWIifQ.QB1gLkCI9yxO0Qt4fo3e0BaOj0aXOBQuLgr7FJHtvgaY3nakZH16k1VFG9ShIzGNLPch9g4GWcJAYfiMo8zGT36RN8kYzl3844I_QvQHoelpBp2ENBZb9IXflm47w0lLUZOQI4IQMSIGQHgxkFPhiU3kQnuatAVBt2EQMhbmp3WyYbEjzWyi3eXFOKz-n75uOfPIVgD0l3g4XXDl8nR4BgrNu5x-dxNHuCRbD-ImBssZAz3wLlgG46p45t_jjDq8-wbHmRGNx9hXlVB5HSd__xFrDkww8wP6hzHlxEw5aN7ScP9jXFieajzprO0AIucjorjHKuNKWf098MvXuLfOBg",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{OrderAccepted}}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/{{JSONENV}}/deep/v1/events/FulfillmentOrderCreateAcknowledged",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"{{JSONENV}}",
+								"deep",
+								"v1",
+								"events",
+								"FulfillmentOrderCreateAcknowledged"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. ShipToOrderCancel",
+					"id": "21626076-f4d6ef56-4225-4540-b361-67efc6d6d6bc",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJIRmxKSEE5ZmVpQkxuNXA1REs2TkRyRlZQejJBa0R0YiIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjUxNjcwNDc0MDA1Iiwic3RvcmVJZCI6IiIsInVzbiI6IjVhMzdmOWVjLTdlZWEtNmU1OS0zZjlhLWJmNGEwYmY5NDhlOSIsImF1ZCI6IkhGbEpIQTlmZWlCTG41cDVESzZORHJGVlB6MkFrRHRiIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NTE2NzA0NzQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY1MTY3NDA3NCwiaWF0IjoxNjUxNjcwNDc0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI2M2E4ZWJiYi0zNzM1LTU4NTctYmFmOC00OGYyNjkyM2U0MjIifQ.zt7E_RM1yygkkZyVLq35sXW6yrh4uAHu50N6dCa3t9MPRPeqJ5OClwinPvimW05PWltj2TJbEdT55gpUNSNh9qeEWU8AnMaVg4qeKhjkfWyFC8ZdrNR8bn-1lG4Ao345Z2mBEUlHByIGqwIvN2gYmgQPIYEupIScrVEs1d-1qAlG4tBcnBcb-zC2ErucPEwQmCWOEq7cLH9wqe0-fGj94_d5SysH9bv5yOVtnesCuNrsokJ4M1izLsssiQxOpYwXcSYBQvcPhCNfTbqqWiJKFPJnKFR_Gaz8AE96ewIOwTqpE_ZB12SfUDT5iM_4LZDn0FOuvIBBiRkTG_HQYrEuxA",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"eventId\": \"b205317c-ad03-1eec-85ab-d1ff3364924c\",\n    \"eventType\": \"OrderCancellationConfirmed\",\n    \"eventTime\": \"2021-09-14T06:20:44.108Z\",\n    \"eventProducerId\": \"SupplyChain\",\n    \"specifications\": [],\n    \"auditInfo\": {\n        \"orderId\": \"{{OrderId}}\"\n    },\n    \"payload\": {\n        \"feOrderId\": \"{{OrderId}}\",\n        \"supplyChain\": {\n            \"orderNumber\": \"7730153261\",\n            \"orderDate\": \"20210914\",\n            \"documentType\": \"ZETM\",\n            \"channelId\": 22,\n            \"orderReason\": \"NAO\",\n            \"orderReasonDescription\": \"New Activation Order\",\n            \"cancelReason\": \"NA\",\n            \"cancelReasonDesc\": \"Reason Unknown\"\n        }\n    }\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/qlab02/deep/v1/events/OrderCancellationConfirmed",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"qlab02",
+								"deep",
+								"v1",
+								"events",
+								"OrderCancellationConfirmed"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. OrderRejected",
+					"id": "21626076-364a7715-239d-4b80-8ad9-f02779f83496",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJIRmxKSEE5ZmVpQkxuNXA1REs2TkRyRlZQejJBa0R0YiIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjUxNjcwNDc0MDA1Iiwic3RvcmVJZCI6IiIsInVzbiI6IjVhMzdmOWVjLTdlZWEtNmU1OS0zZjlhLWJmNGEwYmY5NDhlOSIsImF1ZCI6IkhGbEpIQTlmZWlCTG41cDVESzZORHJGVlB6MkFrRHRiIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NTE2NzA0NzQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY1MTY3NDA3NCwiaWF0IjoxNjUxNjcwNDc0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI2M2E4ZWJiYi0zNzM1LTU4NTctYmFmOC00OGYyNjkyM2U0MjIifQ.zt7E_RM1yygkkZyVLq35sXW6yrh4uAHu50N6dCa3t9MPRPeqJ5OClwinPvimW05PWltj2TJbEdT55gpUNSNh9qeEWU8AnMaVg4qeKhjkfWyFC8ZdrNR8bn-1lG4Ao345Z2mBEUlHByIGqwIvN2gYmgQPIYEupIScrVEs1d-1qAlG4tBcnBcb-zC2ErucPEwQmCWOEq7cLH9wqe0-fGj94_d5SysH9bv5yOVtnesCuNrsokJ4M1izLsssiQxOpYwXcSYBQvcPhCNfTbqqWiJKFPJnKFR_Gaz8AE96ewIOwTqpE_ZB12SfUDT5iM_4LZDn0FOuvIBBiRkTG_HQYrEuxA",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\"eventId\": \"64F526FCB6C643C5B008CCE88E655B58\",\n\"eventType\": \"FulfillmentOrderCreateAcknowledged\",\n\"eventTime\": \"2022-05-02T11:28:07Z\",\n\"eventProducerId\": \"SupplyChain\",\n\"specifications\": [],\n\"auditInfo\": {\n\"iamUniqueId\": \"6109573890\",\n\"batchId\": \"6109573890\",\n\"orderId\": \"CTLGK1SJT65438\"\n},\n\"payload\": {\n\"orderAcknowledgement\": {\n\"eventType\": \"SalesOrderCreated\",\n\"supplyChainOrderId\": \"0314502075\",\n\"frontEndOrderId\": \"CTLGK1SJT65438\",\n\"supplyChainSalesDocumentType\": \"ZETM\",\n\"supplyChainSalesOrganization\": \"V081\",\n\"supplyChainSalesDistributionChannel\": \"12\",\n\"supplyChainSalesDivision\": \"00\",\n\"supplyChainSalesGroup\": \"988\",\n\"supplyChainSalesOffice\": \"9026\",\n\"supplyChainOrderReason\": \"M05\",\n\"supplyChainCreatedDate\": \"2022-04-28T04:28:05\",\n\"supplyChainDocumentDate\": \"20220428\",\n\"supplyChainMessages\": [\n{\n\"supplyChainMessageType\": \"E\",\n\"supplyChainMessageText\": \"Sales Order (0314502075) failed.\"\n}\n]\n}\n}\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/qlab02/deep/v1/events/FulfillmentOrderCreateAcknowledged",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"qlab02",
+								"deep",
+								"v1",
+								"events",
+								"FulfillmentOrderCreateAcknowledged"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "21626076-6f522f10-6e46-4b87-8c13-9e2b1e77faec"
+		},
+		{
+			"name": "RETURN",
+			"item": [
+				{
+					"name": "Fetch Deepio_SKU_IMEI",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"id": "9db5a8a3-09cc-48ac-ba8c-990dbd929344",
+								"exec": [
+									"// ✅ Parse the JSON response body\r",
+									"var responseJson = JSON.parse(pm.response.text());\r",
+									"\r",
+									"// ✅ Extract the payload JSON string and parse it\r",
+									"var payload = JSON.parse(responseJson.payload);\r",
+									"\r",
+									"// ✅ Loop through the returnItemList and extract IMEI, SKU, Description\r",
+									"payload.payload.documents.returnItemList.forEach(function(item, index) {\r",
+									"    var imeiValue = item.imei ? item.imei : \"\";\r",
+									"    var skuValue = item.sku || \"\";\r",
+									"    var descValue = item.description || \"\";\r",
+									"\r",
+									"    // ✅ Store IMEI, SKU, Description as imei1, sku1, desc1, imei2, sku2, desc2, ...\r",
+									"    var idx = index + 1;\r",
+									"    pm.environment.set(`imei${idx}`, imeiValue);\r",
+									"    pm.environment.set(`sku${idx}`, skuValue);\r",
+									"    pm.environment.set(`desc${idx}`, descValue);\r",
+									"\r",
+									"    // ✅ Log for debug\r",
+									"    if (imeiValue !== \"\") {\r",
+									"        console.log(`imei${idx}: ${imeiValue}`);\r",
+									"    }\r",
+									"    console.log(`sku${idx}: ${skuValue}`);\r",
+									"    console.log(`desc${idx}: ${descValue}`);\r",
+									"});\r",
+									"\r",
+									"\r",
+									"///////////////////////////////////////\r",
+									"//Running getOrderDetails\r",
+									"\r",
+									"// === 📌 1️⃣ Get OrderId ===\r",
+									"const orderId = pm.collectionVariables.get(\"OrderId\") || pm.environment.get(\"OrderId\");\r",
+									"if (!orderId) {\r",
+									"  console.error(\"❌ No OrderId found — stopping run.\");\r",
+									"  pm.execution.setNextRequest(null);\r",
+									"  return;\r",
+									"}\r",
+									"\r",
+									"// === 📌 2️⃣ Build SOAP XML ===\r",
+									"const soapBody = `\r",
+									"<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"\r",
+									"  xmlns:v1=\"http://services.tmobile.com/OrderManagement/OrderWSIL/V1\"\r",
+									"  xmlns:base=\"http://services.tmobile.com/base\">\r",
+									"   <soapenv:Header/>\r",
+									"   <soapenv:Body>\r",
+									"      <n0:getOrderDetailsRequest\r",
+									"        serviceTransactionId=\"AUTOGEN-ORDERDETAILS\"\r",
+									"        xmlns:n0=\"http://services.tmobile.com/OrderManagement/OrderWSIL/V1\"\r",
+									"        xmlns:n1=\"http://services.tmobile.com/base\">\r",
+									"         <n1:header>\r",
+									"            <n1:sender>\r",
+									"               <n1:senderId>CARE</n1:senderId>\r",
+									"               <n1:channelId>CARE</n1:channelId>\r",
+									"               <n1:applicationId>SAP-CARE</n1:applicationId>\r",
+									"               <n1:applicationUserId>POSTMAN_AUTOMATION</n1:applicationUserId>\r",
+									"               <n1:sessionId>PM-AUTO-SESSION</n1:sessionId>\r",
+									"               <n1:workflowId>OrderWSIL.getOrderDetails</n1:workflowId>\r",
+									"               <n1:activityId>AUTO-ACTIVITY-ID</n1:activityId>\r",
+									"               <n1:timestamp>${new Date().toISOString()}</n1:timestamp>\r",
+									"               <n1:dealerCode>2211802</n1:dealerCode>\r",
+									"               <n1:interactionId>PM-AUTO-${Date.now()}</n1:interactionId>\r",
+									"               <n1:entitlements>\r",
+									"                  <n1:entitlement>\r",
+									"                     <n1:actionName>VIEW_CUSTOMER_SSN_TAXID</n1:actionName>\r",
+									"                  </n1:entitlement>\r",
+									"                  <n1:entitlement>\r",
+									"                     <n1:actionName>VIEW_ORDER_RECEIPT</n1:actionName>\r",
+									"                  </n1:entitlement>\r",
+									"                  <n1:userId>POSTMAN_AUTOMATION</n1:userId>\r",
+									"               </n1:entitlements>\r",
+									"            </n1:sender>\r",
+									"            <n1:target>\r",
+									"               <n1:targetSystemId>\r",
+									"                  <n1:systemId>WSIL</n1:systemId>\r",
+									"                  <n1:userId>POSTMAN_AUTOMATION</n1:userId>\r",
+									"               </n1:targetSystemId>\r",
+									"               <n1:userCompanyId>T-Mobile</n1:userCompanyId>\r",
+									"               <n1:servicePartnerId>TMO</n1:servicePartnerId>\r",
+									"               <n1:transactionType>OrderWSIL.getOrderDetails</n1:transactionType>\r",
+									"            </n1:target>\r",
+									"            <n1:providerId>\r",
+									"               <n1:contextId>IAM ID</n1:contextId>\r",
+									"            </n1:providerId>\r",
+									"         </n1:header>\r",
+									"         <n0:orderId>${orderId}</n0:orderId>\r",
+									"      </n0:getOrderDetailsRequest>\r",
+									"   </soapenv:Body>\r",
+									"</soapenv:Envelope>\r",
+									"`;\r",
+									"\r",
+									"// === 📌 3️⃣ Send SOAP Request ===\r",
+									"const host = pm.environment.get(\"XMLENV\") || \"default-env\";\r",
+									"\r",
+									"pm.sendRequest({\r",
+									"  url: `http://${host}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/OrderWSIL`,\r",
+									"  method: \"POST\",\r",
+									"  header: {\r",
+									"    \"Content-Type\": \"text/xml\"\r",
+									"  },\r",
+									"  body: {\r",
+									"    mode: \"raw\",\r",
+									"    raw: soapBody\r",
+									"  }\r",
+									"}, (err, res) => {\r",
+									"  if (err) {\r",
+									"    console.error(\"❌ SOAP Request failed:\", err);\r",
+									"    pm.execution.setNextRequest(null);\r",
+									"    return;\r",
+									"  }\r",
+									"\r",
+									"  console.log(`✅ SOAP Response received — Status Code: ${res.code}`);\r",
+									"  const xml = res.text();\r",
+									"\r",
+									"  // ✅ Store full raw for later parsing\r",
+									"  pm.environment.set(\"OrderDetailsResponse\", xml);\r",
+									"\r",
+									"  // === 📌 4️⃣ Check <ns:responseStatus code=\"100\">\r",
+									"  const statusMatch = xml.match(/<ns:responseStatus[^>]*code=\"(\\d+)\"/i);\r",
+									"  if (statusMatch && statusMatch[1] === \"100\") {\r",
+									"    console.log(\"✅ responseStatus code=100 → continuing flow.\");\r",
+									"  } else {\r",
+									"    console.error(`❌ Invalid responseStatus: ${statusMatch ? statusMatch[1] : \"Not Found\"}. Stopping run.`);\r",
+									"    pm.execution.setNextRequest(null);\r",
+									"  }\r",
+									"});\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "2b2d5946-7188-441c-bd4f-f23568094c45",
+								"exec": [
+									"// Get current UTC date and time\r",
+									"const now = new Date();\r",
+									"\r",
+									"// Format 1: ISO 8601 without milliseconds (e.g., 2025-04-22T13:08:06Z)\r",
+									"const currentDateTime = now.toISOString().split('.')[0] + 'Z';\r",
+									"console.log(\"currentDateTime (no milliseconds):\", currentDateTime);\r",
+									"\r",
+									"// Format 2: ISO 8601 with milliseconds (default format from toISOString)\r",
+									"const currentDateTime1 = now.toISOString();\r",
+									"console.log(\"currentDateTime1 (with milliseconds):\", currentDateTime1);\r",
+									"\r",
+									"// Format 3: ISO 8601 with offset -00:00\r",
+									"const currentDateTime2 = currentDateTime.replace('Z', '-00:00');\r",
+									"console.log(\"currentDateTime2 (with offset -00:00):\", currentDateTime2);\r",
+									"\r",
+									"// Set variables in Postman environment\r",
+									"pm.environment.set(\"currentDateTime\", currentDateTime);\r",
+									"pm.environment.set(\"currentDateTime1\", currentDateTime1);\r",
+									"pm.environment.set(\"currentDateTime2\", currentDateTime2);\r",
+									"\r",
+									"let env = pm.collectionVariables.get(\"Environment\");\r",
+									"let jsonEnv, xmlEnv;\r",
+									"\r",
+									"if (env) {\r",
+									"    env = env.toUpperCase();\r",
+									"\r",
+									"    switch (env) {\r",
+									"        case \"DEV2\":\r",
+									"            jsonEnv = \"ilab02\";\r",
+									"            xmlEnv = \"d02\";\r",
+									"            break;\r",
+									"        case \"DEV7\":\r",
+									"            jsonEnv = \"ilab03\";\r",
+									"            xmlEnv = \"d07\";\r",
+									"            break;\r",
+									"        case \"DEV8\":\r",
+									"            jsonEnv = \"ilab04\";\r",
+									"            xmlEnv = \"d08\";\r",
+									"            break;\r",
+									"        case \"QLAB02\":\r",
+									"            jsonEnv = \"qlab02\";\r",
+									"            xmlEnv = \"ql2\";\r",
+									"            break;\r",
+									"        case \"QLAB03\":\r",
+									"            jsonEnv = \"qlab03\";\r",
+									"            xmlEnv = \"ql3\";\r",
+									"            break;\r",
+									"        case \"QLAB07\":\r",
+									"            jsonEnv = \"qlab07\";\r",
+									"            xmlEnv = \"ql7\";\r",
+									"            break;\r",
+									"        default:\r",
+									"            console.log(`⚠️ No mapping defined for Environment: ${env}`);\r",
+									"    }\r",
+									"\r",
+									"    if (jsonEnv && xmlEnv) {\r",
+									"        pm.environment.set(\"JSONENV\", jsonEnv);  // ✅ Set as environment variable\r",
+									"        pm.environment.set(\"XMLENV\", xmlEnv);    // ✅ Set as environment variable\r",
+									"        console.log(`✅ Environment: ${env}`);\r",
+									"        console.log(`→ JSONENV set to: ${jsonEnv}`);\r",
+									"        console.log(`→ XMLENV set to: ${xmlEnv}`);\r",
+									"    }\r",
+									"} else {\r",
+									"    console.log(\"⚠️ Environment variable is not set in collection variables.\");\r",
+									"}\r",
+									"\r",
+									"\r",
+									"\r",
+									"// === Cleanup ALL OrderLineIdX_Return variables ===\r",
+									"for (let i = 1; i <= 50; i++) {\r",
+									"  pm.environment.unset(`OrderLineId${i}_Return`);\r",
+									"}\r",
+									"\r",
+									"console.log(\"🧹 Cleared old OrderLineIdX_Return variables (1..50).\");"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-33a6b71b-1427-436f-a3cb-5921d7069457",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYwMjk4NjU0Mzk5Iiwic3RvcmVJZCI6IiIsInVzbiI6IjNmNjY0NmFkLTQwZmUtYzFkOC05ZDdmLTBkY2Y5NGRlYTk5NyIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjAyOTg2NTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MDMwMjI1NCwiaWF0IjoxNjYwMjk4NjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI5MjQ0N2QwOC01MDQ0LWI1MjUtNjgxNi0yZjQwNmJhNDBkYzMifQ.fHt1cwhzX_W_WtUMSuIlnTCyVGXwpnnLCbBcbTcFalgudYBnor9xx_GLrkH7roLuWAcYeM4cNsSA-WXwnXTfCLyPqYR7QjjYiOKCjvgrCbO0TP-duc5RWg2w9CT8WwTFx9mIPz_y19wYjMPR1Kn_CfLyv-HOQPxkvakyz6Glq9mGO2IOHM9NNgZYohJfB32wU1f6YfYYGL-s1XFAkQBdq5TzHAaShIxJvSTZ8gfOkIz9yf_RMOHxhfxLfkFd0lHDwxo_V2_LqF0lfrW4R-6jdHDQl5jO6HSnE6l5l5kT4EZKqVbimr_T_e8lytxY8cDtv3tLCTuyk5fJYfInN94K5A",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"consumerFlag\" :  false ,\n  \"env\" :  \"{{ESP}}\" ,\n  \"eventName\" :  \"ShippingLabelGenerationRequested\" ,\n  \"key\" : \"orderId\" ,\n  \"value\" :  \"{{OrderId}}\" ,\n  \"payloadFlag\" :  true\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"api",
+								"deep",
+								"checker",
+								"v1",
+								"event",
+								"parameters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Fetch Deepio_SAPOrderID_Return",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"id": "ea80c3de-1a6a-4332-890a-ead4e77c7851",
+								"exec": [
+									"let responseJson = pm.response.json();\r",
+									"\r",
+									"try {\r",
+									"    // Parse the stringified payload\r",
+									"    let parsedPayload = JSON.parse(responseJson.payload);\r",
+									"\r",
+									"    // Navigate to the nested supplyChainOrderId\r",
+									"    let supplyChainOrderId = parsedPayload.payload?.orderAcknowledgement?.supplyChainOrderId;\r",
+									"\r",
+									"    if (supplyChainOrderId) {\r",
+									"        pm.environment.set(\"SAPOrderID_Return\", supplyChainOrderId);\r",
+									"        console.log(`✅ SAPOrderID_Return: ${supplyChainOrderId}`);\r",
+									"    } else {\r",
+									"        console.warn(\"⚠️ supplyChainOrderId not found in payload.\");\r",
+									"    }\r",
+									"\r",
+									"} catch (e) {\r",
+									"    console.error(\"❌ Error parsing payload:\", e);\r",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "ff6a6457-13a9-4946-8431-a8cedd31bbe1",
+								"exec": [
+									"// 1️⃣ Get the XML string\r",
+									"const responseXML = pm.environment.get(\"OrderDetailsResponse\");\r",
+									"\r",
+									"// 2️⃣ Regex to find all REMOVE orderLines\r",
+									"const orderLineRegex = /<pfx:orderLine[^>]*actionCode=\"REMOVE\"[^>]*orderLineId=\"(\\d+)\"[\\s\\S]*?<\\/pfx:orderLine>/g;\r",
+									"\r",
+									"let match;\r",
+									"let matchCounter = 0; // Count how many REMOVE lines found\r",
+									"\r",
+									"while ((match = orderLineRegex.exec(responseXML)) !== null) {\r",
+									"  const orderLineId = match[1];\r",
+									"  const orderLineBlock = match[0];\r",
+									"\r",
+									"  // Extract productOfferingId (optional for debug)\r",
+									"  const productOfferingIdMatch = orderLineBlock.match(/<pfx:productOffering[^>]*productOfferingId=\"([^\"]+)\"/);\r",
+									"  const productOfferingId = productOfferingIdMatch ? productOfferingIdMatch[1] : \"N/A\";\r",
+									"\r",
+									"  // Extract <pfx:name>\r",
+									"  const nameMatch = orderLineBlock.match(/<pfx:productOffering[^>]*>[\\s\\S]*?<pfx:name>([^<]+)<\\/pfx:name>/);\r",
+									"  const nameValue = nameMatch ? nameMatch[1].trim() : \"N/A\";\r",
+									"\r",
+									"  matchCounter++;\r",
+									"  const idVar = `OrderLineId${matchCounter}_Return`;\r",
+									"  const nameVar = `OrderLineName${matchCounter}_Return`;\r",
+									"\r",
+									"  pm.environment.set(idVar, orderLineId);\r",
+									"  pm.environment.set(nameVar, nameValue);\r",
+									"\r",
+									"  console.log(`✅ Saved ${idVar} = ${orderLineId}`);\r",
+									"  console.log(`📌 Saved ${nameVar} = ${nameValue}`);\r",
+									"}\r",
+									"\r",
+									"// Final log\r",
+									"if (matchCounter === 0) {\r",
+									"  console.warn(\"⚠️ No REMOVE orderLines found.\");\r",
+									"} else {\r",
+									"  console.log(`✅ Stored ${matchCounter} REMOVE orderLineIds + names.`);\r",
+									"}\r",
+									"\r",
+									"// 3️⃣ Match ANY <pfx:orderPayment> block — paymentId may or may not be present\r",
+									"// 2️⃣ Always find the first <pfx:orderPayment> with a paymentId\r",
+									"const paymentIdRegex = /<pfx:orderPayment[^>]*paymentId=\"([^\"]+)\"/i;\r",
+									"const paymentIdMatch = paymentIdRegex.exec(responseXML);\r",
+									"\r",
+									"if (paymentIdMatch) {\r",
+									"  const paymentId = paymentIdMatch[1];\r",
+									"  pm.environment.set(\"receivedPaymentId\", paymentId);\r",
+									"  console.log(`💰 Found paymentId → receivedPaymentId = ${paymentId}`);\r",
+									"} else {\r",
+									"  console.warn(\"⚠️ No paymentId found on any <pfx:orderPayment>.\");\r",
+									"}\r",
+									"\r",
+									"// 3️⃣ Always find <pfx:orderPayment actionCode=\"ADD\"> for authorizationAmount\r",
+									"const addPaymentRegex = /<pfx:orderPayment[^>]*actionCode=\"ADD\"[^>]*>[\\s\\S]*?<\\/pfx:orderPayment>/i;\r",
+									"const addPaymentMatch = addPaymentRegex.exec(responseXML);\r",
+									"\r",
+									"if (addPaymentMatch) {\r",
+									"  const addPaymentBlock = addPaymentMatch[0];\r",
+									"  const authAmountMatch = addPaymentBlock.match(/<pfx:authorizationAmount[^>]*>([^<]+)<\\/pfx:authorizationAmount>/);\r",
+									"\r",
+									"  if (authAmountMatch) {\r",
+									"    const authAmount = authAmountMatch[1].trim();\r",
+									"    pm.environment.set(\"authorizationAmount\", authAmount);\r",
+									"    console.log(`💵 Found authorizationAmount → authorizationAmount = ${authAmount}`);\r",
+									"  } else {\r",
+									"    console.warn(\"⚠️ No <pfx:authorizationAmount> found in ADD block.\");\r",
+									"  }\r",
+									"} else {\r",
+									"  console.warn(\"⚠️ No <pfx:orderPayment actionCode='ADD'> found to extract authorizationAmount.\");\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-b3b99385-98ce-44b9-a245-44fb0bbc0b78",
+					"protocolProfileBehavior": {
+						"strictSSL": false,
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYwMjk4NjU0Mzk5Iiwic3RvcmVJZCI6IiIsInVzbiI6IjNmNjY0NmFkLTQwZmUtYzFkOC05ZDdmLTBkY2Y5NGRlYTk5NyIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjAyOTg2NTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MDMwMjI1NCwiaWF0IjoxNjYwMjk4NjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI5MjQ0N2QwOC01MDQ0LWI1MjUtNjgxNi0yZjQwNmJhNDBkYzMifQ.fHt1cwhzX_W_WtUMSuIlnTCyVGXwpnnLCbBcbTcFalgudYBnor9xx_GLrkH7roLuWAcYeM4cNsSA-WXwnXTfCLyPqYR7QjjYiOKCjvgrCbO0TP-duc5RWg2w9CT8WwTFx9mIPz_y19wYjMPR1Kn_CfLyv-HOQPxkvakyz6Glq9mGO2IOHM9NNgZYohJfB32wU1f6YfYYGL-s1XFAkQBdq5TzHAaShIxJvSTZ8gfOkIz9yf_RMOHxhfxLfkFd0lHDwxo_V2_LqF0lfrW4R-6jdHDQl5jO6HSnE6l5l5kT4EZKqVbimr_T_e8lytxY8cDtv3tLCTuyk5fJYfInN94K5A",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"consumerFlag\" :  false ,\n  \"env\" :  \"{{ESP}}\" ,\n  \"eventName\" :  \"FulfillmentReturnOrderAcknowledged\" ,\n  \"key\" : \"orderId\" ,\n  \"value\" :  \"{{OrderId}}\" ,\n  \"payloadFlag\" :  true\n}"
+						},
+						"url": {
+							"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+							"protocol": "https",
+							"host": [
+								"deepio-internal-npe",
+								"t-mobile",
+								"com"
+							],
+							"path": [
+								"api",
+								"deep",
+								"checker",
+								"v1",
+								"event",
+								"parameters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1. ShipToOrderPlaced",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "047256e2-5e82-4cbd-9e86-b9aabacf3016",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									"\r",
+									"\r",
+									"\r",
+									"try {\r",
+									"  // Cleanup previous OrderLineList only\r",
+									"  pm.environment.unset(\"OrderLineList\");\r",
+									"\r",
+									"  let blockXml = \"\";\r",
+									"  let validDeviceCount = 0;\r",
+									"\r",
+									"  for (let i = 1; i <= 50; i++) {\r",
+									"    const sku = pm.environment.get(`sku${i}`);\r",
+									"    const imei = pm.environment.get(`imei${i}`);\r",
+									"\r",
+									"    if (!sku) continue; // Skip if no SKU — not a valid device\r",
+									"\r",
+									"    const orderLineIdVar = `OrderLineId${i}_Return`;\r",
+									"    const orderLineIdValue = pm.environment.get(orderLineIdVar);\r",
+									"\r",
+									"    if (!orderLineIdValue) {\r",
+									"      console.warn(`⚠️ Skipping: \"${orderLineIdVar}\" is missing.`);\r",
+									"      continue;\r",
+									"    }\r",
+									"\r",
+									"    // Build XML block\r",
+									"    const xmlBlock = `<v1:orderLine orderLineId=\"${orderLineIdValue}\">\r",
+									"   <v1:orderSchedule>\r",
+									"      <v1:orderQuantity>1</v1:orderQuantity>\r",
+									"   </v1:orderSchedule>\r",
+									"</v1:orderLine>`;\r",
+									"\r",
+									"    blockXml += xmlBlock + \"\\n\";\r",
+									"    validDeviceCount++;\r",
+									"\r",
+									"    console.log(`✅ Added block for ${orderLineIdVar} = ${orderLineIdValue}`);\r",
+									"    console.log(`SKU${i}: ${sku}`);\r",
+									"    console.log(`IMEI${i}: ${imei || \"(none)\"}`);\r",
+									"  }\r",
+									"\r",
+									"  blockXml = blockXml.trim();\r",
+									"  pm.environment.set(\"OrderLineList\", blockXml);\r",
+									"\r",
+									"  console.log(`\\n📦 Total valid device blocks: ${validDeviceCount}`);\r",
+									"  console.log(\"📄 Final OrderLineList XML:\\n\" + blockXml);\r",
+									"\r",
+									"} catch (error) {\r",
+									"  console.error(\"❌ Error in generating order line XML:\", error);\r",
+									"  throw new Error(\"Script failed.\");\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-2911a029-f6ad-4b07-8d2e-2d9a04a77247",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/EventWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r\n   <soapenv:Body>\r\n      <v1:notifyIncomingEventRequest serviceTransactionId=\"\" version=\"\">\r\n         <base:header>\r\n            <base:sender>\r\n               <base:senderId>10</base:senderId>\r\n               <base:channelId>10</base:channelId>\r\n               <base:applicationId>SAP</base:applicationId>\r\n               <base:applicationUserId>SMNAIK1</base:applicationUserId>\r\n            </base:sender>\r\n         </base:header>\r\n         <v1:event eventId=\"78934578935\">\r\n            <v1:eventType>ShipToOrderPlaced</v1:eventType>\r\n            <v1:eventTime>{{currentDateTime2}}</v1:eventTime>\r\n         </v1:event>\r\n         <v1:orderPayload orderId=\"{{OrderId}}\">\r\n            <v1:key>\r\n               <v1:keyName>sapOrderId</v1:keyName>\r\n               <v1:keyValue>{{SAPOrderID_Return}}</v1:keyValue>\r\n            </v1:key>\r\n            <v1:shipping id=\"HKFJ68H6S5FKFH77\">\r\n               <v1:freightCarrier>FEDEX</v1:freightCarrier>\r\n               <!--The Estimated Shipping Date From. If dates are blank/null or not populated from source, this will be treated as BackOrder-->\r\n               <v1:requestedShipTime>2001-12-25T12:00:00</v1:requestedShipTime>\r\n               <!--The Estimated Shipping Date To. If dates are blank/null or not populated from source, this will be treated as BackOrder-->\r\n               <v1:requestedDeliveryTime>2001-12-31T12:00:00</v1:requestedDeliveryTime>\r\n               <v1:note>\r\n                  <v1:noteType>deliveryNumber</v1:noteType>\r\n                  <v1:content>789345789345</v1:content>\r\n               </v1:note>\r\n               <v1:serviceLevelCode>2ND DAY</v1:serviceLevelCode>\r\n            </v1:shipping>\r\n            {{OrderLineList}}\r\n         </v1:orderPayload>\r\n      </v1:notifyIncomingEventRequest>\r\n   </soapenv:Body>\r\n</soapenv:Envelope>",
+							"options": {
+								"raw": {
+									"language": "xml"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://{{XMLENV}}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/EventWSIL",
+							"protocol": "http",
+							"host": [
+								"{{XMLENV}}-esa-wsa-w2a-a01",
+								"lab",
+								"uprising",
+								"t-mobile",
+								"com"
+							],
+							"port": "10032",
+							"path": [
+								"services",
+								"EventWSIL"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. ShipToReturnDeliveryCreated",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "fdd6216f-d86f-45c5-9488-98d985395e21",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									"\r",
+									"\r",
+									"try {\r",
+									"    // Clear previously generated XML\r",
+									"    pm.environment.unset(\"GeneratedOrderLineBlock\");\r",
+									"\r",
+									"    let blockXml = \"\";\r",
+									"    let validDeviceCount = 0;\r",
+									"\r",
+									"    for (let i = 1; i <= 50; i++) {\r",
+									"        const orderLineId = pm.environment.get(`OrderLineId${i}_Return`);\r",
+									"        const sku = pm.environment.get(`sku${i}`);\r",
+									"        const imei = pm.environment.get(`imei${i}`);\r",
+									"\r",
+									"        if (!orderLineId || !sku) continue;\r",
+									"\r",
+									"        let xmlBlock = `\r",
+									"<v1:orderLine orderLineId=\"${orderLineId}\">\r",
+									"   <v1:productOffering>\r",
+									"      <v1:offeringVariant>\r",
+									"         <v1:sku>${sku}</v1:sku>\r",
+									"      </v1:offeringVariant>\r",
+									"   </v1:productOffering>`;\r",
+									"\r",
+									"        if (imei && imei.trim() !== \"\") {\r",
+									"            xmlBlock += `\r",
+									"   <v1:networkResource>\r",
+									"      <v1:imei>${imei}</v1:imei>\r",
+									"   </v1:networkResource>`;\r",
+									"        }\r",
+									"\r",
+									"        xmlBlock += `\r",
+									"</v1:orderLine>`;\r",
+									"\r",
+									"        blockXml += xmlBlock + \"\\n\";\r",
+									"        validDeviceCount++;\r",
+									"\r",
+									"        // Logging\r",
+									"        console.log(`✅ Device ${validDeviceCount} added`);\r",
+									"        console.log(`   OrderLineId: ${orderLineId}`);\r",
+									"        console.log(`   SKU: ${sku}`);\r",
+									"        console.log(`   IMEI: ${imei || \"(none)\"}`);\r",
+									"    }\r",
+									"\r",
+									"    blockXml = blockXml.trim();\r",
+									"    pm.environment.set(\"GeneratedOrderLineBlock\", blockXml);\r",
+									"\r",
+									"    // Summary\r",
+									"    console.log(`\\n📦 Total valid device blocks: ${validDeviceCount}`);\r",
+									"    console.log(\"📄 Final XML:\\n\" + blockXml);\r",
+									"\r",
+									"} catch (error) {\r",
+									"    console.error(\"❌ Error building order line blocks:\", error);\r",
+									"    throw new Error(\"Script halted.\");\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-bb13817d-7b40-4b8f-bafe-9919aa736505",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/EventWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r\n   <soapenv:Body>\r\n      <v1:notifyIncomingEventRequest serviceTransactionId=\"\" version=\"\">\r\n         <base:header>\r\n            <base:sender>\r\n               <base:senderId>10</base:senderId>\r\n               <base:channelId>10</base:channelId>\r\n               <base:applicationId>SAP</base:applicationId>\r\n               <base:applicationUserId>SMNAIK1</base:applicationUserId>\r\n            </base:sender>\r\n         </base:header>\r\n         <v1:event eventId=\"78934578936\">\r\n            <v1:eventType>ShipToReturnDeliveryCreated</v1:eventType>\r\n            <v1:eventTime>{{currentDateTime2}}</v1:eventTime>\r\n         </v1:event>\r\n         <v1:orderPayload orderId=\"{{OrderId}}\">\r\n            <v1:key>\r\n               <v1:keyName>sapOrderId</v1:keyName>\r\n               <v1:keyValue>{{SAPOrderID_Return}}</v1:keyValue>\r\n            </v1:key>\r\n            <v1:shipping>\r\n               <v1:actualDeliveryTime>{{currentDateTime2}}</v1:actualDeliveryTime>\r\n            </v1:shipping>\r\n            {{GeneratedOrderLineBlock}}\r\n            <v1:orderAttachment id=\"23423423424\"/>\r\n         </v1:orderPayload>\r\n      </v1:notifyIncomingEventRequest>\r\n   </soapenv:Body>\r\n</soapenv:Envelope>",
+							"options": {
+								"raw": {
+									"language": "xml"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://{{XMLENV}}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/EventWSIL",
+							"protocol": "http",
+							"host": [
+								"{{XMLENV}}-esa-wsa-w2a-a01",
+								"lab",
+								"uprising",
+								"t-mobile",
+								"com"
+							],
+							"port": "10032",
+							"path": [
+								"services",
+								"EventWSIL"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. ReturnReceived",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "30a9d31b-06dd-432e-a4e4-7cad0acb9777",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									"\r",
+									"\r",
+									"\r",
+									"try {\r",
+									"    // Clear previously generated XML\r",
+									"    pm.environment.unset(\"GeneratedOrderLineBlock\");\r",
+									"\r",
+									"    let blockXml = \"\";\r",
+									"    let validDeviceCount = 0;\r",
+									"\r",
+									"    for (let i = 1; i <= 50; i++) {\r",
+									"        const orderLineId = pm.environment.get(`OrderLineId${i}_Return`);\r",
+									"        const sku = pm.environment.get(`sku${i}`);\r",
+									"        const imei = pm.environment.get(`imei${i}`);\r",
+									"\r",
+									"        if (!orderLineId || !sku) continue;\r",
+									"\r",
+									"        let xmlBlock = `\r",
+									"<v1:orderLine orderLineId=\"${orderLineId}\">\r",
+									"   <v1:productOffering>\r",
+									"      <v1:offeringVariant>\r",
+									"         <v1:sku>${sku}</v1:sku>\r",
+									"      </v1:offeringVariant>\r",
+									"   </v1:productOffering>`;\r",
+									"\r",
+									"        if (imei && imei.trim() !== \"\") {\r",
+									"            xmlBlock += `\r",
+									"   <v1:networkResource>\r",
+									"      <v1:imei>${imei}</v1:imei>\r",
+									"   </v1:networkResource>`;\r",
+									"        }\r",
+									"\r",
+									"        xmlBlock += `\r",
+									"</v1:orderLine>`;\r",
+									"\r",
+									"        blockXml += xmlBlock + \"\\n\";\r",
+									"        validDeviceCount++;\r",
+									"\r",
+									"        // Logging\r",
+									"        console.log(`✅ Device ${validDeviceCount} added`);\r",
+									"        console.log(`   OrderLineId: ${orderLineId}`);\r",
+									"        console.log(`   SKU: ${sku}`);\r",
+									"        console.log(`   IMEI: ${imei || \"(none)\"}`);\r",
+									"    }\r",
+									"\r",
+									"    blockXml = blockXml.trim();\r",
+									"    pm.environment.set(\"GeneratedOrderLineBlock\", blockXml);\r",
+									"\r",
+									"    // Summary\r",
+									"    console.log(`\\n📦 Total valid device blocks: ${validDeviceCount}`);\r",
+									"    console.log(\"📄 Final XML:\\n\" + blockXml);\r",
+									"\r",
+									"} catch (error) {\r",
+									"    console.error(\"❌ Error building order line blocks:\", error);\r",
+									"    throw new Error(\"Script halted.\");\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-72a8ffd7-c466-40b1-b3a0-a4844255ecbb",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/EventWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r\n   <soapenv:Body>\r\n      <v1:notifyIncomingEventRequest serviceTransactionId=\"\" version=\"\">\r\n         <base:header>\r\n            <base:sender>\r\n               <base:senderId>10</base:senderId>\r\n               <base:channelId>10</base:channelId>\r\n               <base:applicationId>SAP</base:applicationId>\r\n               <base:applicationUserId>SMNAIK1</base:applicationUserId>\r\n            </base:sender>\r\n         </base:header>\r\n         <v1:event eventId=\"78934578935\">\r\n            <v1:eventType>ReturnReceived</v1:eventType>\r\n            <v1:eventTime>{{currentDateTime2}}</v1:eventTime>\r\n         </v1:event>\r\n         <v1:orderPayload orderId=\"{{OrderId}}\">\r\n         <v1:key>\r\n               <v1:keyName>sapOrderId</v1:keyName>\r\n               <v1:keyValue>{{SAPOrderID_Return}}</v1:keyValue>\r\n            </v1:key>\r\n            <!--The Shipping Information. The id is the tracking number-->\r\n            <v1:shipping>\r\n               <v1:actualDeliveryTime>{{currentDateTime2}}</v1:actualDeliveryTime>\r\n            </v1:shipping>\r\n            {{GeneratedOrderLineBlock}}\r\n         </v1:orderPayload>\r\n      </v1:notifyIncomingEventRequest>\r\n   </soapenv:Body>\r\n</soapenv:Envelope>",
+							"options": {
+								"raw": {
+									"language": "xml"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://{{XMLENV}}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/EventWSIL",
+							"protocol": "http",
+							"host": [
+								"{{XMLENV}}-esa-wsa-w2a-a01",
+								"lab",
+								"uprising",
+								"t-mobile",
+								"com"
+							],
+							"port": "10032",
+							"path": [
+								"services",
+								"EventWSIL"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4. RefundProcessed",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "e8c0c1ae-d2e5-4a68-a747-f9a122a65a9c",
+								"exec": [
+									"const delay = pm.collectionVariables.get(\"Delay\");; // 2 seconds\r",
+									"console.log(`⏳ Waiting for ${delay / 1000} seconds before sending the request...`);\r",
+									"\r",
+									"const start = Date.now();\r",
+									"while (Date.now() - start < delay) {\r",
+									"  // Busy wait\r",
+									"}\r",
+									"\r",
+									"console.log(`✅ Proceeding with the request...`);\r",
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"id": "21626076-9c27ba8a-01a2-459c-9892-b7b9d756d663",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/xml",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:v1=\"http://services.tmobile.com/OrderManagement/EventWSIL/V1\" xmlns:base=\"http://services.tmobile.com/base\">\r\n   <soapenv:Body>\r\n      <v1:notifyIncomingEventRequest serviceTransactionId=\"57657576576576576576\" version=\"\">\r\n         <base:header>\r\n            <base:sender>\r\n               <base:senderId>10</base:senderId>\r\n               <base:channelId>10</base:channelId>\r\n               <base:applicationId>SAP</base:applicationId>\r\n               <base:applicationUserId>SMNAIK1</base:applicationUserId>\r\n            </base:sender>\r\n         </base:header>\r\n         <v1:event eventId=\"78934578935\">\r\n            <v1:eventType>RefundProcessed</v1:eventType>\r\n            <v1:eventTime>{{currentDateTime2}}</v1:eventTime>\r\n         </v1:event>\r\n         <v1:orderPayload orderId=\"{{OrderId}}\">\r\n            <!--Sucess Scenario-->\r\n            <v1:orderPayment>\r\n               <v1:creditCardPayment>\r\n                  <!--Refund Amount-->\r\n                  <v1:chargeAmount currencyCode=\"USD\">{{authorizationAmount}}</v1:chargeAmount>\r\n               </v1:creditCardPayment>\r\n               <v1:specificationGroup>\r\n                  <!--Original vesta payment id-->\r\n                  <v1:specificationValue name=\"originalReceivedPaymentId\">{{receivedPaymentId}}</v1:specificationValue>\r\n               </v1:specificationGroup>\r\n               <v1:receivedPaymentId>{{receivedPaymentId}}</v1:receivedPaymentId>\r\n               \r\n            </v1:orderPayment>\r\n            <!--Sucess Scenario-->\r\n            </v1:orderPayload>\r\n      </v1:notifyIncomingEventRequest>\r\n   </soapenv:Body>\r\n</soapenv:Envelope>",
+							"options": {
+								"raw": {
+									"language": "xml"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://{{XMLENV}}-esa-wsa-w2a-a01.lab.uprising.t-mobile.com:10032/services/EventWSIL",
+							"protocol": "http",
+							"host": [
+								"{{XMLENV}}-esa-wsa-w2a-a01",
+								"lab",
+								"uprising",
+								"t-mobile",
+								"com"
+							],
+							"port": "10032",
+							"path": [
+								"services",
+								"EventWSIL"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "21626076-c1113b92-b61c-46bb-83a1-187dff7c3312"
+		},
+		{
+			"name": "Fetch Deepio_SAPORDERID_with Error Handling Script_With OrderiD",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Step 1: Parse the response body to get the JSON object\r",
+							"const responseJson1 = pm.response.json();\r",
+							"\r",
+							"// Step 2: Extract the 'payload' string from the response\r",
+							"const payloadString1 = responseJson1.payload;\r",
+							"\r",
+							"// Step 3: Convert the 'payload' string to a JSON object\r",
+							"const payloadJson = JSON.parse(payloadString1);\r",
+							"\r",
+							"// Step 4: Store the converted JSON object in a variable\r",
+							"pm.environment.set(\"ShiptoOrderPlaced\", JSON.stringify(payloadJson));\r",
+							"\r",
+							"// Step 5: Log the converted payload to the console\r",
+							"console.log(\"Converted Payload JSON:\", payloadJson);\r",
+							"\r",
+							"\r",
+							"try {\r",
+							"    // Step 1: Get the raw response body\r",
+							"    let response = pm.response.json();\r",
+							"\r",
+							"    // Step 2: Check if the payload is a string and parse it\r",
+							"    let parsedPayload;\r",
+							"    if (typeof response.payload === 'string') {\r",
+							"        // Parse the payload string into a JSON object\r",
+							"        parsedPayload = JSON.parse(response.payload);\r",
+							"    } else {\r",
+							"        // If payload is already an object, use it directly\r",
+							"        parsedPayload = response.payload;\r",
+							"    }\r",
+							"\r",
+							"    // Step 3: Extract the \"orderId\" from the \"auditInfo\" inside parsedPayload\r",
+							"    // let extractedOrderId = parsedPayload?.auditInfo?.orderId || \"defaultOrderId\"; // Default value if orderId is not found\r",
+							"    // console.log(\"Extracted Order Id:\", extractedOrderId);\r",
+							"\r",
+							"    // Step 4: Extract the \"orderNumber\" from the \"supplyChain\" inside parsedPayload\r",
+							"    let extractedOrderNumber = parsedPayload?.payload?.supplyChain?.orderNumber || \"1234567890\"; // Default value\r",
+							"    console.log(\"Extracted Order Number:\", extractedOrderNumber);\r",
+							"\r",
+							"    // Step 5: Extract the \"accountNumber\" from the \"auditInfo\" inside parsedPayload\r",
+							"    let accountNumber = parsedPayload?.auditInfo?.accountNumber || \"00000000\"; // Default value if accountNumber is not found\r",
+							"    console.log(\"Extracted Account Number:\", accountNumber);\r",
+							"\r",
+							"    // Step 6: Store the extracted values in environment variables\r",
+							"    pm.environment.set(\"SAPOrderID\", extractedOrderNumber);\r",
+							"    // pm.environment.set(\"OrderId\", extractedOrderId);\r",
+							"    pm.environment.set(\"ban\", accountNumber);\r",
+							"\r",
+							"    // Step 7: Store the parsed payload in an environment variable\r",
+							"    pm.environment.set(\"eventResponse\", JSON.stringify(parsedPayload));\r",
+							"\r",
+							"    // Step 8: Also store the parsed payload in a local variable\r",
+							"    pm.variables.set(\"eventResponse\", parsedPayload);\r",
+							"\r",
+							"    // Step 9: Process the extracted information\r",
+							"    let data = parsedPayload;  // This is the full response now\r",
+							"    let payload = data.payload; // This is the \"payload\" field within the response\r",
+							"\r",
+							"    // Step 10: Loop through line items and extract Device, SIM, or Accessory-related data\r",
+							"    let count = 1;\r",
+							"    for (let item of payload.lineItem) {\r",
+							"        // Check if productType is Device, SIM, or Accessory\r",
+							"        if ([\"Device\", \"SIM\", \"Accessory\"].includes(item.productType)) {\r",
+							"            let sku = item.sku || \"\";\r",
+							"            let msisdn = item.msisdn && item.msisdn !== \"0000000000\" ? item.msisdn : \"\";\r",
+							"            let orderDetailID = (item.imeiSim && item.imeiSim[0] && item.imeiSim[0].orderDetailID) || \"\";\r",
+							"\r",
+							"            // Store the captured values in environment variables\r",
+							"            pm.environment.set(`sku${count}`, sku);\r",
+							"            pm.environment.set(`phoneNumber${count}`, msisdn);\r",
+							"            pm.environment.set(`OrderLineId${count}`, orderDetailID);\r",
+							"\r",
+							"            // Log the captured values to the console\r",
+							"            console.log(`Captured Values for item ${count}:`);\r",
+							"            console.log(`SKU: ${sku}`);\r",
+							"            console.log(`MSISDN: ${msisdn}`);\r",
+							"            console.log(`Order Detail ID: ${orderDetailID}`);\r",
+							"\r",
+							"            count++;\r",
+							"        }\r",
+							"    }\r",
+							"\r",
+							"    // Log the number of Device/SIM/Accessory line items captured\r",
+							"    console.log(`Captured ${count - 1} Device/SIM/Accessory line items.`);\r",
+							"\r",
+							"} catch (error) {\r",
+							"    // Handle errors and store the default values in case of failure\r",
+							"    console.error(\"Error occurred while parsing response:\", error);\r",
+							"\r",
+							"    let defaultOrderNumber = \"1234567890\";\r",
+							"    pm.environment.set(\"SAPOrderID\", defaultOrderNumber);\r",
+							"\r",
+							"    console.log(\"Default Order Number stored:\", defaultOrderNumber);\r",
+							"}\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"id": "bd489c47-73ac-4aff-b70b-7c6758bb769a"
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"id": "ea5438de-8238-4ca9-b580-558d4f0ebaba"
+					}
+				}
+			],
+			"id": "21626076-128885d8-9181-48a3-8541-1ad971005616",
+			"protocolProfileBehavior": {
+				"strictSSL": false,
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJraWQiOiI0Nzc1M2UzZi0zOGFjLTQ1ODQtZDcxYy0zZDgxYTE1Nzk5NWMiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJOTUw0bVh6WlJNeTFBTTIzWlVXMGJhTVpmbGViUDJjciIsInJ0Ijoie1wic2VnbWVudGF0aW9uSWRcIjpcIlBPTEFSSVNcIn0iLCJkZWFsZXJDb2RlIjoiIiwiaXNzIjoiaHR0cHM6XC9cL3FhdDAxLmFwaS50LW1vYmlsZS5jb21cL29hdXRoMlwvdjQiLCJtYXN0ZXJEZWFsZXJDb2RlIjoiIiwiYXV0aFRpbWUiOiIxNjYwMjk4NjU0Mzk5Iiwic3RvcmVJZCI6IiIsInVzbiI6IjNmNjY0NmFkLTQwZmUtYzFkOC05ZDdmLTBkY2Y5NGRlYTk5NyIsImF1ZCI6Ik5NTDRtWHpaUk15MUFNMjNaVVcwYmFNWmZsZWJQMmNyIiwic2VuZGVySWQiOiIiLCJuYmYiOjE2NjAyOTg2NTQsInNjb3BlIjoiIiwiYXBwbGljYXRpb25JZCI6IiIsImV4cCI6MTY2MDMwMjI1NCwiaWF0IjoxNjYwMjk4NjU0LCJjaGFubmVsSWQiOiIiLCJqdGkiOiI5MjQ0N2QwOC01MDQ0LWI1MjUtNjgxNi0yZjQwNmJhNDBkYzMifQ.fHt1cwhzX_W_WtUMSuIlnTCyVGXwpnnLCbBcbTcFalgudYBnor9xx_GLrkH7roLuWAcYeM4cNsSA-WXwnXTfCLyPqYR7QjjYiOKCjvgrCbO0TP-duc5RWg2w9CT8WwTFx9mIPz_y19wYjMPR1Kn_CfLyv-HOQPxkvakyz6Glq9mGO2IOHM9NNgZYohJfB32wU1f6YfYYGL-s1XFAkQBdq5TzHAaShIxJvSTZ8gfOkIz9yf_RMOHxhfxLfkFd0lHDwxo_V2_LqF0lfrW4R-6jdHDQl5jO6HSnE6l5l5kT4EZKqVbimr_T_e8lytxY8cDtv3tLCTuyk5fJYfInN94K5A",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"consumerFlag\" :  false ,\n  \"env\" :  \"{{ESP}}\" ,\n  \"eventName\" :  \"FulfillmentOrderCreated\" ,\n  \"key\" : \"orderId\" ,\n  \"value\" :  \"{{OrderId}}\" ,\n  \"payloadFlag\" :  true\n}"
+				},
+				"url": {
+					"raw": "https://deepio-internal-npe.t-mobile.com/api/deep/checker/v1/event/parameters",
+					"protocol": "https",
+					"host": [
+						"deepio-internal-npe",
+						"t-mobile",
+						"com"
+					],
+					"path": [
+						"api",
+						"deep",
+						"checker",
+						"v1",
+						"event",
+						"parameters"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ReserveSIM",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "4aa0a4a4-72ed-4509-96c2-55728cd82c58",
+						"exec": [
+							"// let password = pm.collectionVariables.get(\"password\");\r",
+							"//This script is only for TAG AUTH TOKEN\r",
+							"const isAuthenticationRequired = true; //if you don't need it then make is false\r",
+							"var token_env = 'qlab02'; // dev01 | dit01 | qlab02 | plab01 | prod\r",
+							"const add_mandatory_headers = true;\r",
+							"//if it is true , then it will add some headers automatically service-transaction-id, sender_id, channel_id, application_id and Content-Type='application/json' with the below values .\r",
+							"//Restricted Area Beyond this point , Do not scroll\r",
+							"token_env = token_env.toLowerCase();\r",
+							"var tokenUrl = `https://auth.${token_env}.npe.tedge.adn-gw.t-mobile.com/oauth2/v1/tokens`;\r",
+							"\r",
+							"if(token_env == 'qlab02' || token_env == 'plab01') {\r",
+							"    username = 'iiabR0XqY3GOHQOCLmZ7QyItAXvb5LUs';\r",
+							"    password = pm.collectionVariables.get(\"password\");\r",
+							"}\r",
+							"\r",
+							"if(isAuthenticationRequired) {\r",
+							"    console.log(`Token URL : ${tokenUrl}`);\r",
+							"    console.log(`username : ${username}`);\r",
+							"    console.log(`password : ${password}`);\r",
+							"    //Encoding Base64 of username and password to get Basic Token\r",
+							"    var encoded = btoa(`${username}:${password}`);\r",
+							"    console.log(`Encoded value: ${encoded}`);\r",
+							"    const basic_auth = `Basic ${encoded}`;\r",
+							"\r",
+							"    const getTokenRequest = {\r",
+							"    method: 'POST',\r",
+							"    url: tokenUrl,\r",
+							"    header: {\r",
+							"        'Accept' : 'application/json',\r",
+							"        'Postman-Token' : 'd4c10052-422f-4abc-9e29-e924a356b6a6',\r",
+							"        'cache-control' : 'no-cache',\r",
+							"        'Authorization' : basic_auth\r",
+							"        }\r",
+							"    };\r",
+							"    pm.sendRequest(getTokenRequest, (err, response) => {\r",
+							"    if(err) {\r",
+							"        console.log(err);\r",
+							"        if(err.code == 'ECONNREFUSED' || err.code == 'ETIMEDOUT')  \r",
+							"        { throw new Error(`Check Your VPN Connection or URL ${tokenUrl} not able to connect`);  }\r",
+							"        else if(err.code == 'ENOTFOUND')  \r",
+							"        { throw new Error(`Auth Token Error: Not able to connect to ${err.hostname}`); }\r",
+							"        else\r",
+							"        { \r",
+							"            console.log(`Error : ${err}`);\r",
+							"            throw new Error(\"Auth Token Error: Connect SDP Appgate or Check Console Logs. , open console by CTRL+ALT+C\");\r",
+							"        }\r",
+							"    } else if(response.code != '200') {\r",
+							"        console.log(response);\r",
+							"        if(response.status == 'Unauthorized')\r",
+							"        {throw new Error(\"username/password for Auth Token are incorrect.\");}\r",
+							"        else if(response.status == 'Method Not Allowed')\r",
+							"        {throw new Error(`Auth Token Error: Issue with Token URL : ${tokenUrl}`);}\r",
+							"        else \r",
+							"        {\r",
+							"            console.log(`Error : ${response}`);\r",
+							"            throw new Error(\"Auth Token Error: Check Console Logs. , open console by CTRL+ALT+C\");\r",
+							"        }\r",
+							"    } \r",
+							"    else {\r",
+							"    const jsonResponse = response.json();\r",
+							"    const newAccessToken = jsonResponse.access_token;\r",
+							"    const bearerToken = `Bearer ${newAccessToken}`;\r",
+							"    console.log(`access_token : ${bearerToken}`);\r",
+							"    //set Bearer token in the request\r",
+							"    pm.request.headers.add({key: \"Authorization\", value: bearerToken});\r",
+							"    }\r",
+							"    });\r",
+							"}\r",
+							"\r",
+							"// if(add_mandatory_headers) {\r",
+							"    //   pm.request.headers.add({key: \"service-transaction-id\", value: service_transaction_id});\r",
+							"    //   pm.request.headers.add({key: \"Content-Type\", value: \"application/json\"});\r",
+							"//   }"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "d4f772c0-2cc4-4b02-a02e-01385b844e62",
+						"exec": [
+							"let responseJson = pm.response.json();\r",
+							"\r",
+							"// Check if resourceStatus is AA\r",
+							"if (responseJson.resourceStatus !== 'AA') {\r",
+							"    let retryCount = parseInt(pm.environment.get('reserveSimRetryCount') || 0);\r",
+							"\r",
+							"    if (retryCount < 5) {\r",
+							"        retryCount++;\r",
+							"        console.log(`resourceStatus is not AA. Retrying... Attempt #${retryCount}`);\r",
+							"        pm.environment.set('reserveSimRetryCount', retryCount);\r",
+							"        pm.execution.setNextRequest(\"ReserveSIM\"); // This will work only in Collection Runner\r",
+							"    } else {\r",
+							"        console.log(\"Max retries reached. Stopping.\");\r",
+							"        pm.environment.unset('reserveSimRetryCount');\r",
+							"\r",
+							"        // Forcefully stop the collection runner by throwing an error\r",
+							"        throw new Error(\"ReserveSIM resourceStatus did not become 'AA' after 5 retries. Stopping collection run.\");\r",
+							"    }\r",
+							"} else {\r",
+							"    console.log(\"resourceStatus is AA ✅\");\r",
+							"    pm.environment.unset('reserveSimRetryCount');\r",
+							"\r",
+							"    let imsi = responseJson.imsi;\r",
+							"    if (imsi) {\r",
+							"        pm.environment.set(\"device1_IMSI1\", imsi);\r",
+							"        console.log(`✅ IMSI saved: ${imsi}`);\r",
+							"    } else {\r",
+							"        console.warn(\"IMSI not found.\");\r",
+							"    }\r",
+							"}\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"id": "21626076-a24b5e68-753c-412d-9899-4708153ec75c",
+			"protocolProfileBehavior": {
+				"strictSSL": false,
+				"protocolVersion": "auto",
+				"disabledSystemHeaders": {},
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"brandId\": \"TMO\",\n\t\"serialNumber\": \"{{EID}}\",\n\t\"overrideProfile\": true\n}"
+				},
+				"url": {
+					"raw": "https://dtiisr-esimmanagement-reserve-esim-v1.{{ESP}}.npe.tedge.adn-gw.t-mobile.com/devicemanagement/v1/reserve-esim",
+					"protocol": "https",
+					"host": [
+						"dtiisr-esimmanagement-reserve-esim-v1",
+						"{{ESP}}",
+						"npe",
+						"tedge",
+						"adn-gw",
+						"t-mobile",
+						"com"
+					],
+					"path": [
+						"devicemanagement",
+						"v1",
+						"reserve-esim"
+					]
+				},
+				"description": "## Reserve eSIM Endpoint\n\nThis endpoint allows users to reserve an eSIM for a specific device. It is particularly useful for managing eSIM profiles and ensuring that the correct eSIM is allocated to the desired device.\n\n### Request\n\n**Method:** POST  \n**URL:** `https://dtiisr-esimmanagement-reserve-esim-v1.{{ESP}}.npe.tedge.adn-gw.t-mobile.com/devicemanagement/v1/reserve-esim`\n\n#### Request Body\n\nThe request body should be in JSON format and include the following parameters:\n\n- **brandId** (string): The identifier for the brand associated with the eSIM. For example, \"TMO\".\n    \n- **serialNumber** (string): The serial number of the device for which the eSIM is being reserved. This should be replaced with the actual device identifier (e.g., `{{device1_EID}}`).\n    \n- **overrideProfile** (boolean): A flag indicating whether to override the existing profile for the device. Set to `false` to maintain the current profile.\n    \n\n**Example Request Body:**\n\n``` json\n{\n  \"brandId\": \"TMO\",\n  \"serialNumber\": \"{{device1_EID}}\",\n  \"overrideProfile\": false\n}\n\n ```\n\n### Response\n\nThe response from this endpoint will typically include information about the success or failure of the eSIM reservation process. The structure of the response may vary based on the outcome of the request but generally includes the following:\n\n- **status** (string): Indicates whether the reservation was successful or if an error occurred.\n    \n- **message** (string): Provides additional details or error messages related to the reservation status.\n    \n- **data** (object): Contains any relevant data returned from the reservation process, which may include the reserved eSIM details.\n    \n\nBy following this structure, users can effectively reserve eSIMs for their devices and handle the responses accordingly."
+			},
+			"response": []
+		},
+		{
+			"name": "ReserveSIM_Performance",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "4aa0a4a4-72ed-4509-96c2-55728cd82c58",
+						"exec": [
+							"// let password = pm.collectionVariables.get(\"password\");\r",
+							"//This script is only for TAG AUTH TOKEN\r",
+							"const isAuthenticationRequired = true; //if you don't need it then make is false\r",
+							"var token_env = 'qlab02'; // dev01 | dit01 | qlab02 | plab01 | prod\r",
+							"const add_mandatory_headers = true;\r",
+							"//if it is true , then it will add some headers automatically service-transaction-id, sender_id, channel_id, application_id and Content-Type='application/json' with the below values .\r",
+							"//Restricted Area Beyond this point , Do not scroll\r",
+							"token_env = token_env.toLowerCase();\r",
+							"var tokenUrl = `https://auth.${token_env}.npe.tedge.adn-gw.t-mobile.com/oauth2/v1/tokens`;\r",
+							"\r",
+							"if(token_env == 'qlab02' || token_env == 'plab01') {\r",
+							"    username = 'iiabR0XqY3GOHQOCLmZ7QyItAXvb5LUs';\r",
+							"    password = pm.collectionVariables.get(\"password\");\r",
+							"}\r",
+							"\r",
+							"if(isAuthenticationRequired) {\r",
+							"    console.log(`Token URL : ${tokenUrl}`);\r",
+							"    console.log(`username : ${username}`);\r",
+							"    console.log(`password : ${password}`);\r",
+							"    //Encoding Base64 of username and password to get Basic Token\r",
+							"    var encoded = btoa(`${username}:${password}`);\r",
+							"    console.log(`Encoded value: ${encoded}`);\r",
+							"    const basic_auth = `Basic ${encoded}`;\r",
+							"\r",
+							"    const getTokenRequest = {\r",
+							"    method: 'POST',\r",
+							"    url: tokenUrl,\r",
+							"    header: {\r",
+							"        'Accept' : 'application/json',\r",
+							"        'Postman-Token' : 'd4c10052-422f-4abc-9e29-e924a356b6a6',\r",
+							"        'cache-control' : 'no-cache',\r",
+							"        'Authorization' : basic_auth\r",
+							"        }\r",
+							"    };\r",
+							"    pm.sendRequest(getTokenRequest, (err, response) => {\r",
+							"    if(err) {\r",
+							"        console.log(err);\r",
+							"        if(err.code == 'ECONNREFUSED' || err.code == 'ETIMEDOUT')  \r",
+							"        { throw new Error(`Check Your VPN Connection or URL ${tokenUrl} not able to connect`);  }\r",
+							"        else if(err.code == 'ENOTFOUND')  \r",
+							"        { throw new Error(`Auth Token Error: Not able to connect to ${err.hostname}`); }\r",
+							"        else\r",
+							"        { \r",
+							"            console.log(`Error : ${err}`);\r",
+							"            throw new Error(\"Auth Token Error: Connect SDP Appgate or Check Console Logs. , open console by CTRL+ALT+C\");\r",
+							"        }\r",
+							"    } else if(response.code != '200') {\r",
+							"        console.log(response);\r",
+							"        if(response.status == 'Unauthorized')\r",
+							"        {throw new Error(\"username/password for Auth Token are incorrect.\");}\r",
+							"        else if(response.status == 'Method Not Allowed')\r",
+							"        {throw new Error(`Auth Token Error: Issue with Token URL : ${tokenUrl}`);}\r",
+							"        else \r",
+							"        {\r",
+							"            console.log(`Error : ${response}`);\r",
+							"            throw new Error(\"Auth Token Error: Check Console Logs. , open console by CTRL+ALT+C\");\r",
+							"        }\r",
+							"    } \r",
+							"    else {\r",
+							"    const jsonResponse = response.json();\r",
+							"    const newAccessToken = jsonResponse.access_token;\r",
+							"    const bearerToken = `Bearer ${newAccessToken}`;\r",
+							"    console.log(`access_token : ${bearerToken}`);\r",
+							"    //set Bearer token in the request\r",
+							"    pm.request.headers.add({key: \"Authorization\", value: bearerToken});\r",
+							"    }\r",
+							"    });\r",
+							"}\r",
+							"\r",
+							"// if(add_mandatory_headers) {\r",
+							"    //   pm.request.headers.add({key: \"service-transaction-id\", value: service_transaction_id});\r",
+							"    //   pm.request.headers.add({key: \"Content-Type\", value: \"application/json\"});\r",
+							"//   }"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "d4f772c0-2cc4-4b02-a02e-01385b844e62",
+						"exec": [
+							"// Parse the JSON response body\r",
+							"let responseJson = pm.response.json();\r",
+							"\r",
+							"// Check resourceStatus\r",
+							"if (responseJson.resourceStatus !== 'AA') {\r",
+							"    // Retry logic\r",
+							"    let retryCount = parseInt(pm.environment.get('reserveSimRetryCount') || 0);\r",
+							"\r",
+							"    if (retryCount < 5) {\r",
+							"        retryCount++;\r",
+							"        console.log(`❌ resourceStatus is not AA. Retrying... Attempt #${retryCount}`);\r",
+							"        pm.environment.set('reserveSimRetryCount', retryCount);\r",
+							"        pm.execution.setNextRequest(\"ReserveSIM\"); // Works in Collection Runner\r",
+							"    } else {\r",
+							"        console.log(\"⛔ Max retries reached. Stopping.\");\r",
+							"        pm.environment.unset('reserveSimRetryCount');\r",
+							"        throw new Error(\"ReserveSIM resourceStatus did not become 'AA' after 5 retries. Stopping collection run.\");\r",
+							"    }\r",
+							"} else {\r",
+							"    // resourceStatus is AA\r",
+							"    console.log(\"✅ resourceStatus is AA\");\r",
+							"\r",
+							"    // Clear retry count\r",
+							"    pm.environment.unset('reserveSimRetryCount');\r",
+							"\r",
+							"    // Save IMSI as device1_IMSI1\r",
+							"    if (responseJson.imsi) {\r",
+							"        pm.environment.set(\"device1_IMSI1\", responseJson.imsi);\r",
+							"        console.log(`✅ IMSI saved: ${responseJson.imsi}`);\r",
+							"    } else {\r",
+							"        console.warn(\"⚠️ IMSI not found.\");\r",
+							"    }\r",
+							"\r",
+							"    // Also add serialNumber & IMSI to Perf_SIM_List\r",
+							"    let perfSimList = pm.environment.get(\"Perf_SIM_List\");\r",
+							"    perfSimList = perfSimList ? JSON.parse(perfSimList) : [];\r",
+							"\r",
+							"    perfSimList.push({\r",
+							"        serialNumber: responseJson.serialNumber,\r",
+							"        imsi: responseJson.imsi\r",
+							"    });\r",
+							"\r",
+							"    pm.environment.set(\"Perf_SIM_List\", JSON.stringify(perfSimList));\r",
+							"    console.log(\"✅ Added to Perf_SIM_List:\", responseJson.serialNumber, responseJson.imsi);\r",
+							"}\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"id": "21626076-113652bb-2c5b-4a80-8aab-19232e1a048c",
+			"protocolProfileBehavior": {
+				"strictSSL": false,
+				"protocolVersion": "auto",
+				"disabledSystemHeaders": {},
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"brandId\": \"TMO\",\n\t\"serialNumber\": \"{{device1_EID}}\",\n\t\"overrideProfile\": true\n}"
+				},
+				"url": {
+					"raw": "https://dtiisr-esimmanagement-reserve-esim-v1.{{ESP}}.npe.tedge.adn-gw.t-mobile.com/devicemanagement/v1/reserve-esim",
+					"protocol": "https",
+					"host": [
+						"dtiisr-esimmanagement-reserve-esim-v1",
+						"{{ESP}}",
+						"npe",
+						"tedge",
+						"adn-gw",
+						"t-mobile",
+						"com"
+					],
+					"path": [
+						"devicemanagement",
+						"v1",
+						"reserve-esim"
+					]
+				},
+				"description": "## Reserve eSIM Endpoint\n\nThis endpoint allows users to reserve an eSIM for a specific device. It is particularly useful for managing eSIM profiles and ensuring that the correct eSIM is allocated to the desired device.\n\n### Request\n\n**Method:** POST  \n**URL:** `https://dtiisr-esimmanagement-reserve-esim-v1.{{ESP}}.npe.tedge.adn-gw.t-mobile.com/devicemanagement/v1/reserve-esim`\n\n#### Request Body\n\nThe request body should be in JSON format and include the following parameters:\n\n- **brandId** (string): The identifier for the brand associated with the eSIM. For example, \"TMO\".\n    \n- **serialNumber** (string): The serial number of the device for which the eSIM is being reserved. This should be replaced with the actual device identifier (e.g., `{{device1_EID}}`).\n    \n- **overrideProfile** (boolean): A flag indicating whether to override the existing profile for the device. Set to `false` to maintain the current profile.\n    \n\n**Example Request Body:**\n\n``` json\n{\n  \"brandId\": \"TMO\",\n  \"serialNumber\": \"{{device1_EID}}\",\n  \"overrideProfile\": false\n}\n\n ```\n\n### Response\n\nThe response from this endpoint will typically include information about the success or failure of the eSIM reservation process. The structure of the response may vary based on the outcome of the request but generally includes the following:\n\n- **status** (string): Indicates whether the reservation was successful or if an error occurred.\n    \n- **message** (string): Provides additional details or error messages related to the reservation status.\n    \n- **data** (object): Contains any relevant data returned from the reservation process, which may include the reserved eSIM details.\n    \n\nBy following this structure, users can effectively reserve eSIMs for their devices and handle the responses accordingly."
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer"
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"id": "f3c40696-d803-4afe-94bb-2c9e694e336a",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"id": "d53d58e9-7bed-4427-8092-34ae5e005b09",
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "Environment",
+			"value": "ENV - DEV2/DEV7/DEV8/QLAB02/QLAB03/QLAB07"
+		},
+		{
+			"key": "ESP",
+			"value": "ESP - QLAB02 / QLAB03 / QLAB06 / QLAB07"
+		},
+		{
+			"key": "RESOURCE_EXT_ENV",
+			"value": ""
+		},
+		{
+			"key": "***************************************",
+			"value": "RESOURCE_EXT_ENV If left Blank Default Environment Value to be set",
+			"disabled": true
+		},
+		{
+			"key": "OrderId",
+			"value": ""
+		},
+		{
+			"key": "***************************************",
+			"value": "****EID to be given in same format********",
+			"disabled": true
+		},
+		{
+			"key": "EID_List",
+			"value": "[\"89049032005001111110000033387394\",\n\"89049032005001111110000033387491\",\n\"89049032005001111110000033387588\",\n\"89049032005001111110000033387685\",\n\"89049032005001111110000033387782\"]"
+		},
+		{
+			"key": "***************************************",
+			"value": "***TAC, change only when required*******",
+			"disabled": true
+		},
+		{
+			"key": "TAC_Codes",
+			"value": "[\n  \"35077773\", \"35487650\", \"35486089\", \"35204888\", \"35710491\", \"35157259\", \"35474166\",\n  \"35040848\", \"35377639\", \"35014178\", \"35706122\", \"35000226\", \"35470375\", \"35923763\",\n  \"35901563\", \"35721036\", \"35868641\", \"35173227\", \"35987197\", \"35671211\", \"35671311\",\n  \"35671411\", \"35671511\", \"35671611\", \"35671711\", \"35671811\", \"35444089\", \"35701474\",\n  \"35450612\", \"35566052\", \"35777175\", \"35133088\", \"35424533\", \"35506058\", \"35973519\",\n  \"35316766\", \"35279427\", \"35937160\", \"35211735\", \"35648714\", \"35354132\", \"35559119\",\n  \"35287147\", \"35678928\", \"35324743\", \"35540481\"\n]\n"
+		},
+		{
+			"key": "Delay",
+			"value": "3000"
+		},
+		{
+			"key": "password",
+			"value": ""
+		},
+		{
+			"key": "**************************************",
+			"value": "****Change during password rotation******",
+			"disabled": true
+		}
+	]
+}
